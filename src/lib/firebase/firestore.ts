@@ -55,6 +55,31 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfile>)
   await updateDoc(doc(db, 'users', uid), data);
 }
 
+// ユーザー削除（Firestoreドキュメントとサブコレクション）
+export async function deleteUser(uid: string): Promise<void> {
+  // サブコレクション削除: answered
+  const answeredSnap = await getDocs(collection(db, 'users', uid, 'answered'));
+  for (const d of answeredSnap.docs) await deleteDoc(d.ref);
+  // サブコレクション削除: collection
+  const collectionSnap = await getDocs(collection(db, 'users', uid, 'collection'));
+  for (const d of collectionSnap.docs) await deleteDoc(d.ref);
+  // サブコレクション削除: fortunes
+  const fortunesSnap = await getDocs(collection(db, 'users', uid, 'fortunes'));
+  for (const d of fortunesSnap.docs) await deleteDoc(d.ref);
+  // サブコレクション削除: chatRooms（メッセージ含む）
+  const roomsSnap = await getDocs(collection(db, 'users', uid, 'chatRooms'));
+  for (const roomDoc of roomsSnap.docs) {
+    const msgsSnap = await getDocs(collection(db, 'users', uid, 'chatRooms', roomDoc.id, 'messages'));
+    for (const m of msgsSnap.docs) await deleteDoc(m.ref);
+    await deleteDoc(roomDoc.ref);
+  }
+  // サブコレクション削除: settings
+  const settingsSnap = await getDocs(collection(db, 'users', uid, 'settings'));
+  for (const d of settingsSnap.docs) await deleteDoc(d.ref);
+  // ユーザードキュメント本体を削除
+  await deleteDoc(doc(db, 'users', uid));
+}
+
 // スコア更新（正解時）
 export async function incrementScore(uid: string, isCorrect: boolean): Promise<void> {
   const updates: Record<string, unknown> = {

@@ -20,6 +20,7 @@ import {
   updateAdminSettings,
   updateQuiz,
   deleteQuiz,
+  deleteUser,
   createQuiz,
   migrateExistingQuizzesToOfficial,
   type AdminSettings,
@@ -160,6 +161,26 @@ export default function AdminPage() {
       console.error('設定更新エラー:', err);
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  // ユーザー削除確認
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
+  const handleDeleteUser = async (uid: string) => {
+    if (deletingUserId === uid) {
+      try {
+        await deleteUser(uid);
+        setUsers(prev => prev.filter(u => u.uid !== uid));
+        showMessage('ユーザーを削除しました');
+      } catch (err) {
+        console.error('ユーザー削除エラー:', err);
+      } finally {
+        setDeletingUserId(null);
+      }
+    } else {
+      setDeletingUserId(uid);
+      setTimeout(() => setDeletingUserId(prev => prev === uid ? null : prev), 3000);
     }
   };
 
@@ -433,6 +454,17 @@ export default function AdminPage() {
                             登録: {formatTimestamp(u.createdAt)}
                           </p>
                         </div>
+                        <button
+                          onClick={() => handleDeleteUser(u.uid)}
+                          className={`p-1.5 rounded-[5px] transition-colors flex-shrink-0 ${
+                            deletingUserId === u.uid
+                              ? 'bg-[var(--color-incorrect)] text-white'
+                              : 'hover:bg-[var(--color-surface)]'
+                          }`}
+                          title={deletingUserId === u.uid ? 'もう一度タップで削除' : '削除'}
+                        >
+                          <Trash2 className={`w-4 h-4 ${deletingUserId === u.uid ? '' : 'text-[var(--color-text-muted)]'}`} />
+                        </button>
                       </div>
                     </Card>
                   );
