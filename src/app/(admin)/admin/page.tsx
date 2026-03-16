@@ -29,6 +29,24 @@ import type { UserProfile, Quiz, QuizCategory } from '@/types';
 
 type Tab = 'users' | 'quizzes' | 'create' | 'settings';
 
+// Firestore Timestamp を安全に日付文字列に変換
+function formatTimestamp(ts: unknown): string {
+  if (!ts) return '不明';
+  // Timestamp オブジェクト（toDate メソッドあり）
+  if (typeof ts === 'object' && ts !== null && 'toDate' in ts && typeof (ts as { toDate: () => Date }).toDate === 'function') {
+    return (ts as { toDate: () => Date }).toDate().toLocaleDateString('ja-JP');
+  }
+  // プレーンオブジェクト {seconds, nanoseconds}
+  if (typeof ts === 'object' && ts !== null && 'seconds' in ts) {
+    return new Date((ts as { seconds: number }).seconds * 1000).toLocaleDateString('ja-JP');
+  }
+  // Date オブジェクト
+  if (ts instanceof Date) {
+    return ts.toLocaleDateString('ja-JP');
+  }
+  return '不明';
+}
+
 const CATEGORIES: QuizCategory[] = [
   'どうぶつ', 'たべもの', 'のりもの', 'しぜん',
   'にちようひん', 'たてもの', 'キャラクター', 'スポーツ', 'その他',
@@ -379,7 +397,7 @@ export default function AdminPage() {
                             <span className="text-[10px] text-[var(--color-text-muted)]">正解率 <span className="font-bold text-[var(--color-text-primary)]">{userAccuracy}%</span></span>
                           </div>
                           <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
-                            登録: {u.createdAt?.toDate?.()?.toLocaleDateString('ja-JP') ?? '不明'}
+                            登録: {formatTimestamp(u.createdAt)}
                           </p>
                         </div>
                       </div>
@@ -433,7 +451,7 @@ export default function AdminPage() {
                           {quiz.category} ・ {quiz.creatorName} ・ 回答{stats.totalAnswered}件 ・ 正解率{stats.accuracy}%
                         </p>
                         <p className="text-[10px] text-[var(--color-text-muted)]">
-                          投稿: {quiz.createdAt?.toDate?.()?.toLocaleDateString('ja-JP') ?? '不明'}
+                          投稿: {formatTimestamp(quiz.createdAt)}
                         </p>
                       </div>
                       <button
