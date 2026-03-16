@@ -453,10 +453,10 @@ export async function addUserMemory(uid: string, memory: string): Promise<void> 
   const existing = await getUserMemory(uid);
   const memories = existing?.memories ?? [];
 
-  // 重複チェック & 最大50件制限
+  // 重複チェック & 最大200件制限
   if (!memories.includes(memory)) {
     memories.push(memory);
-    if (memories.length > 50) {
+    if (memories.length > 200) {
       memories.shift(); // 古い記憶を削除
     }
   }
