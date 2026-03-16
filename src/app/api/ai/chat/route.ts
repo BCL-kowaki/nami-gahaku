@@ -33,7 +33,7 @@ function isImageRequest(message: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, history = [], userMemory = '' } = await request.json();
+    const { message, history = [], userMemory = '', userProfile = {} } = await request.json();
 
     if (!message || typeof message !== 'string') {
       return errorResponse('メッセージがないぜ！', 'MISSING_MESSAGE', 400);
@@ -57,11 +57,19 @@ export async function POST(request: NextRequest) {
     }
 
     // 通常テキストチャット（メモリ付き）
-    return handleTextChat(message, history, userMemory, newMemory);
+    return handleTextChat(message, history, userMemory, newMemory, userProfile);
   } catch (err) {
     console.error('チャットエラー:', err);
     return serverErrorResponse();
   }
+}
+
+// 今日が誕生日かどうか判定
+function isBirthdayToday(birthday: string): boolean {
+  if (!birthday) return false;
+  const today = new Date();
+  const [, month, day] = birthday.split('-').map(Number);
+  return today.getMonth() + 1 === month && today.getDate() === day;
 }
 
 // テキストチャット処理
@@ -69,10 +77,27 @@ async function handleTextChat(
   message: string,
   history: { role: string; content: string }[],
   userMemory: string,
-  newMemory: string | null
+  newMemory: string | null,
+  userProfile: { nickname?: string; birthday?: string }
 ) {
   // ユーザー学習情報をプロンプトに追加
   let systemPrompt = NAMI_CHARACTER_PROMPT;
+
+  // プロフィール情報を事前知識として追加
+  const profileParts: string[] = [];
+  if (userProfile.nickname) {
+    profileParts.push(`ニックネーム: ${userProfile.nickname}`);
+  }
+  if (userProfile.birthday) {
+    profileParts.push(`誕生日: ${userProfile.birthday}`);
+    if (isBirthdayToday(userProfile.birthday)) {
+      profileParts.push('※今日はこのユーザーの誕生日です！会話の中で自然にお祝いしてあげてください。「おたんじょうびおめでとう！」など、なみ画伯らしく祝ってあげてください。');
+    }
+  }
+  if (profileParts.length > 0) {
+    systemPrompt += `\n\n【このユーザーのプロフィール】\n${profileParts.join('\n')}\nニックネームがあれば名前で呼びかけてください。`;
+  }
+
   if (userMemory) {
     systemPrompt += `\n\n【このユーザーについて覚えていること】\n${userMemory}\nこれらの情報を自然に会話に活かしてください。`;
   }

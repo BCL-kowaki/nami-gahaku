@@ -117,13 +117,13 @@ export default function FortunePage() {
                   <Sparkles className="w-4 h-4" />
                   きょうのキャラクター
                 </h2>
-                <div className="relative w-40 h-40 mx-auto bg-white rounded-[5px] border border-[var(--color-border)] overflow-hidden">
+                <div className="relative mx-auto bg-white rounded-[5px] border border-[var(--color-border)] overflow-hidden" style={{ width: '90%', maxWidth: '420px', aspectRatio: '1 / 1' }}>
                   <Image
                     src={fortune.characterImageUrl}
                     alt="今日のキャラクター"
                     fill
                     className="object-contain p-2"
-                    sizes="160px"
+                    sizes="(max-width: 420px) 90vw, 420px"
                   />
                 </div>
                 <p className="text-[10px] text-[var(--color-text-muted)] mt-2">
@@ -179,9 +179,13 @@ export default function FortunePage() {
                 repeat: Infinity,
                 ease: 'easeInOut',
               }}
-              className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-100 to-orange-100 flex items-center justify-center border-2 border-yellow-300"
             >
-              <Star className="w-12 h-12 text-yellow-500" />
+              <Image
+                src="/logo.png"
+                alt="なみ画伯"
+                width={96}
+                height={96}
+              />
             </motion.div>
 
             <div className="text-center">

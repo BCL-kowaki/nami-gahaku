@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  MessageCircle, Send, Trash2, Paintbrush, Loader2,
+  MessageCircle, Send, Trash2, Loader2,
   Plus, ArrowLeft, ChevronRight,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -23,6 +23,8 @@ import {
   saveChatMessage,
   getUserMemoryText,
   addUserMemory,
+  getImageGenCount,
+  incrementImageGenCount,
 } from '@/lib/firebase/firestore';
 import type { ChatMessage, ChatRoom } from '@/types';
 
@@ -39,6 +41,7 @@ export default function ChatPage() {
     setLoading, clearMessages, setView,
   } = useChatStore();
   const user = useAuthStore((s) => s.user);
+  const profile = useAuthStore((s) => s.profile);
 
   // ルーム一覧読み込み
   const loadRooms = useCallback(async () => {
@@ -127,6 +130,7 @@ export default function ChatPage() {
 
   // 画像をFirebase Storageにアップロード
   const uploadGeneratedImage = async (base64: string): Promise<string> => {
+    if (!user) throw new Error('ユーザー未認証');
     const byteString = atob(base64);
     const ab = new ArrayBuffer(byteString.length);
     const ia = new Uint8Array(ab);
@@ -134,10 +138,17 @@ export default function ChatPage() {
     const blob = new Blob([ab], { type: 'image/png' });
 
     const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
-    const storageRef = ref(storage, `official-images/ai-generated/${fileName}`);
+    const storageRef = ref(storage, `chat-images/${user.uid}/${fileName}`);
     await uploadBytes(storageRef, blob, { contentType: 'image/png' });
     return getDownloadURL(storageRef);
   };
+
+  // 画像リクエスト判定用キーワード（API側と同じ）
+  const IMAGE_KEYWORDS = ['描いて', '書いて', '絵を', 'かいて', '画像', 'イラスト', '絵が見たい', '描け'];
+  const MAX_IMAGE_GEN_PER_DAY = 5;
+
+  const isImageRequest = (text: string) =>
+    IMAGE_KEYWORDS.some((kw) => text.includes(kw));
 
   // メッセージ送信
   const handleSend = async () => {
@@ -156,6 +167,35 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
+      // 画像リクエストの場合、1日の上限をチェック
+      if (isImageRequest(sentText)) {
+        const count = await getImageGenCount(user.uid);
+        if (count >= MAX_IMAGE_GEN_PER_DAY) {
+          // 上限超過 → Firestoreに保存してメッセージ表示
+          await saveChatMessage(user.uid, currentRoomId, {
+            roomId: currentRoomId,
+            role: 'user',
+            content: sentText,
+          });
+          const limitMsg: ChatMessage = {
+            id: `limit_${Date.now()}`,
+            role: 'assistant',
+            content: `今日はもう${MAX_IMAGE_GEN_PER_DAY}回絵を描いたから疲れちまったぜ...！また明日描いてやるから楽しみにしてくれよな！`,
+            createdAt: new Date(),
+          };
+          addMessage(limitMsg);
+          await saveChatMessage(user.uid, currentRoomId, {
+            roomId: currentRoomId,
+            role: 'assistant',
+            content: limitMsg.content,
+          });
+          await updateChatRoom(user.uid, currentRoomId, { lastMessage: limitMsg.content.slice(0, 30) + '...' });
+          setLoading(false);
+          inputRef.current?.focus();
+          return;
+        }
+      }
+
       // Firestoreにユーザーメッセージ保存
       await saveChatMessage(user.uid, currentRoomId, {
         roomId: currentRoomId,
@@ -188,6 +228,10 @@ export default function ChatPage() {
           message: sentText,
           history: recentHistory,
           userMemory,
+          userProfile: {
+            nickname: profile?.displayName || '',
+            birthday: profile?.birthday || '',
+          },
         }),
       });
 
@@ -200,6 +244,8 @@ export default function ChatPage() {
         if (data.data.imageBase64) {
           try {
             imageUrl = await uploadGeneratedImage(data.data.imageBase64);
+            // アップロード成功 → 画像生成カウントをインクリメント
+            await incrementImageGenCount(user.uid);
           } catch (err) {
             console.error('画像アップロードエラー:', err);
           }
@@ -224,13 +270,16 @@ export default function ChatPage() {
 
         addMessage(assistantMessage);
 
-        // Firestoreにアシスタントメッセージ保存
-        await saveChatMessage(user.uid, currentRoomId, {
+        // Firestoreにアシスタントメッセージ保存（undefinedフィールドを除外）
+        const assistantMsgData: { roomId: string; role: 'assistant'; content: string; imageUrl?: string } = {
           roomId: currentRoomId,
           role: 'assistant',
           content: data.data.message,
-          imageUrl,
-        });
+        };
+        if (imageUrl) {
+          assistantMsgData.imageUrl = imageUrl;
+        }
+        await saveChatMessage(user.uid, currentRoomId, assistantMsgData);
 
         // ルームの最終メッセージ更新
         const lastMsg = data.data.message.length > 30
@@ -296,9 +345,12 @@ export default function ChatPage() {
             animate={{ opacity: 1 }}
             className="flex flex-col items-center justify-center gap-4 pt-12 text-center"
           >
-            <div className="w-16 h-16 rounded-full bg-[var(--color-surface)] flex items-center justify-center">
-              <Paintbrush className="w-8 h-8 text-[var(--color-text-muted)]" />
-            </div>
+            <Image
+              src="/logo.png"
+              alt="なみ画伯"
+              width={64}
+              height={64}
+            />
             <div>
               <p className="font-bold text-sm">なみ画伯とおしゃべり！</p>
               <p className="text-xs text-[var(--color-text-muted)] mt-1">
@@ -321,8 +373,8 @@ export default function ChatPage() {
                   onClick={() => handleSelectRoom(room)}
                   className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface)] transition-colors text-left"
                 >
-                  <div className="w-8 h-8 rounded-full bg-[var(--color-surface)] flex items-center justify-center flex-shrink-0 border border-[var(--color-border)]">
-                    <Paintbrush className="w-4 h-4 text-[var(--color-text-muted)]" />
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <Image src="/logo.png" alt="なみ画伯" width={32} height={32} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold truncate">{room.title}</p>
@@ -377,9 +429,12 @@ export default function ChatPage() {
             animate={{ opacity: 1 }}
             className="flex flex-col items-center justify-center h-full gap-4 text-center"
           >
-            <div className="w-16 h-16 rounded-full bg-[var(--color-surface)] flex items-center justify-center">
-              <Paintbrush className="w-8 h-8 text-[var(--color-text-muted)]" />
-            </div>
+            <Image
+              src="/logo.png"
+              alt="なみ画伯"
+              width={64}
+              height={64}
+            />
             <div>
               <p className="font-bold text-sm">なみ画伯とおしゃべり！</p>
               <p className="text-xs text-[var(--color-text-muted)] mt-1">
@@ -398,8 +453,8 @@ export default function ChatPage() {
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-full bg-[var(--color-surface)] flex items-center justify-center mr-2 flex-shrink-0 border border-[var(--color-border)]">
-                  <Paintbrush className="w-4 h-4 text-[var(--color-text-muted)]" />
+                <div className="w-8 h-8 rounded-full flex items-center justify-center mr-2 flex-shrink-0 overflow-hidden">
+                  <Image src="/logo.png" alt="なみ画伯" width={32} height={32} />
                 </div>
               )}
               <div
@@ -433,8 +488,8 @@ export default function ChatPage() {
             animate={{ opacity: 1 }}
             className="flex items-center gap-2"
           >
-            <div className="w-8 h-8 rounded-full bg-[var(--color-surface)] flex items-center justify-center flex-shrink-0 border border-[var(--color-border)]">
-              <Paintbrush className="w-4 h-4 text-[var(--color-text-muted)]" />
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+              <Image src="/logo.png" alt="なみ画伯" width={32} height={32} />
             </div>
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[10px] px-3 py-2">
               <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { LogIn } from 'lucide-react';
 import Button from '@/components/ui/Button';
@@ -49,17 +50,20 @@ export default function LoginPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="card p-6"
+      className="flex flex-col items-center"
     >
-      {/* タイトル */}
-      <div className="text-center mb-6">
-        <h1 className="text-2xl font-black mb-1">なみ画伯の</h1>
-        <h2 className="text-lg font-bold text-[var(--color-text-secondary)]">
-          おえかきクイズ
-        </h2>
+      {/* ロゴ */}
+      <div className="mb-6">
+        <Image
+          src="/logo.png"
+          alt="なみ画伯"
+          width={200}
+          height={200}
+          priority
+        />
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full">
         <div>
           <label className="block text-xs font-bold mb-1 text-[var(--color-text-secondary)]">
             メールアドレス

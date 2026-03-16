@@ -430,10 +430,14 @@ export async function getChatMessages(uid: string, roomId: string): Promise<Chat
 // チャットメッセージ保存
 export async function saveChatMessage(uid: string, roomId: string, message: Omit<ChatMessageDoc, 'id' | 'createdAt'>): Promise<string> {
   const msgRef = doc(collection(db, 'users', uid, 'chatRooms', roomId, 'messages'));
-  await setDoc(msgRef, {
-    ...message,
-    createdAt: serverTimestamp(),
-  });
+  // undefinedフィールドを除外（Firestoreはundefined値を受け付けない）
+  const cleanData: Record<string, unknown> = { createdAt: serverTimestamp() };
+  for (const [key, value] of Object.entries(message)) {
+    if (value !== undefined) {
+      cleanData[key] = value;
+    }
+  }
+  await setDoc(msgRef, cleanData);
   return msgRef.id;
 }
 
@@ -473,4 +477,37 @@ export async function getUserMemoryText(uid: string): Promise<string> {
   const memory = await getUserMemory(uid);
   if (!memory || memory.memories.length === 0) return '';
   return memory.memories.join('\n');
+}
+
+// ==================
+// 画像生成回数制限
+// ==================
+
+function getTodayDateStr(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+// 今日の画像生成回数を取得
+export async function getImageGenCount(uid: string): Promise<number> {
+  const snap = await getDoc(doc(db, 'users', uid, 'settings', 'imageGenCount'));
+  if (!snap.exists()) return 0;
+  const data = snap.data();
+  // 日付が違えばリセット
+  if (data.date !== getTodayDateStr()) return 0;
+  return data.count ?? 0;
+}
+
+// 画像生成回数をインクリメント
+export async function incrementImageGenCount(uid: string): Promise<void> {
+  const today = getTodayDateStr();
+  const snap = await getDoc(doc(db, 'users', uid, 'settings', 'imageGenCount'));
+  let count = 1;
+  if (snap.exists() && snap.data().date === today) {
+    count = (snap.data().count ?? 0) + 1;
+  }
+  await setDoc(doc(db, 'users', uid, 'settings', 'imageGenCount'), {
+    date: today,
+    count,
+  });
 }

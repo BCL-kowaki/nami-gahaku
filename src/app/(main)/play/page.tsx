@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, RotateCcw, Trophy, XCircle, CheckCircle, Sparkles } from 'lucide-react';
+import { Play, RotateCcw, Trophy, XCircle, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import Button from '@/components/ui/Button';
 import Loading from '@/components/ui/Loading';
@@ -114,9 +114,13 @@ export default function PlayPage() {
           transition={{ duration: 0.5, ease: 'easeOut' }}
           className="flex flex-col items-center gap-4"
         >
-          <div className="w-32 h-32 rounded-full bg-[var(--color-surface)] border-2 border-[var(--color-border)] flex items-center justify-center">
-            <Sparkles className="w-16 h-16 text-[var(--color-text-muted)]" />
-          </div>
+          <Image
+            src="/logo.png"
+            alt="なみ画伯"
+            width={128}
+            height={128}
+            priority
+          />
           <h1 className="text-2xl font-black">おえかきクイズ</h1>
           <p className="text-sm text-[var(--color-text-secondary)] text-center">
             なみがかいた絵をあてよう！

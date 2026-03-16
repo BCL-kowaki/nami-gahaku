@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&display=swap');
 @import "tailwindcss";
 
 /* ===========================
@@ -22,7 +22,7 @@
 
 /* --- ベーススタイル --- */
 body {
-  font-family: 'Noto Sans JP', sans-serif;
+  font-family: 'Zen Maru Gothic', sans-serif;
   background-color: var(--color-bg);
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
@@ -99,7 +99,7 @@ body {
   border: 1.5px solid var(--color-border);
   border-radius: 5px;
   font-size: 0.875rem;
-  font-family: 'Noto Sans JP', sans-serif;
+  font-family: 'Zen Maru Gothic', sans-serif;
   background-color: var(--color-bg);
   color: var(--color-text-primary);
   transition: border-color 0.2s ease;
