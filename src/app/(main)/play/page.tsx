@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, RotateCcw, Trophy, XCircle, CheckCircle, Sparkles } from 'lucide-react';
 import Image from 'next/image';
@@ -9,11 +9,11 @@ import Loading from '@/components/ui/Loading';
 import Card from '@/components/ui/Card';
 import { useQuizStore } from '@/stores/quizStore';
 import { useAuthStore } from '@/stores/authStore';
-import { getRandomQuiz, saveAnswer, getQuizImagesForFlash } from '@/lib/firebase/firestore';
+import { getRandomQuiz, saveAnswer } from '@/lib/firebase/firestore';
 import { shuffle } from '@/lib/utils';
 import type { QuizDisplay } from '@/types';
 
-type GamePhase = 'start' | 'flash' | 'playing';
+type GamePhase = 'start' | 'playing';
 
 export default function PlayPage() {
   const {
@@ -35,35 +35,13 @@ export default function PlayPage() {
   const user = useAuthStore((s) => s.user);
   const profile = useAuthStore((s) => s.profile);
 
-  // ゲームフェーズ管理
   const [phase, setPhase] = useState<GamePhase>('start');
-  const [flashImages, setFlashImages] = useState<string[]>([]);
-  const [flashIndex, setFlashIndex] = useState(0);
-  const flashTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // フラッシュアニメーション用画像をプリロード
-  const preloadFlashImages = useCallback(async () => {
-    try {
-      const images = await getQuizImagesForFlash(15);
-      setFlashImages(images);
-    } catch (err) {
-      console.error('フラッシュ画像取得エラー:', err);
-    }
-  }, []);
-
-  // スタート画面表示時にフラッシュ画像をプリロード
-  useEffect(() => {
-    if (phase === 'start') {
-      preloadFlashImages();
-    }
-  }, [phase, preloadFlashImages]);
 
   // クイズを1問取得
   const fetchQuiz = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
-      // プロフィールのskipAnswered設定を反映
       const skipAnswered = profile?.skipAnswered ?? false;
       const quiz = await getRandomQuiz(user.uid, skipAnswered);
       if (quiz && quiz.id) {
@@ -88,52 +66,11 @@ export default function PlayPage() {
     }
   }, [user, profile, setCurrentQuiz, setLoading]);
 
-  // フラッシュアニメーション開始
-  const startFlashAnimation = useCallback(() => {
-    setPhase('flash');
-    setFlashIndex(0);
-
-    // 最初のクイズを裏で取得開始
-    fetchQuiz();
-
-    let idx = 0;
-    const totalDuration = 2000; // 2秒間
-    const interval = 120; // 120msごとに切り替え
-    const totalFlashes = Math.floor(totalDuration / interval);
-
-    flashTimerRef.current = setInterval(() => {
-      idx++;
-      setFlashIndex(idx);
-
-      if (idx >= totalFlashes) {
-        if (flashTimerRef.current) {
-          clearInterval(flashTimerRef.current);
-          flashTimerRef.current = null;
-        }
-        setPhase('playing');
-      }
-    }, interval);
-  }, [fetchQuiz]);
-
-  // クリーンアップ
-  useEffect(() => {
-    return () => {
-      if (flashTimerRef.current) {
-        clearInterval(flashTimerRef.current);
-      }
-    };
-  }, []);
-
   // スタートボタン押下
   const handleStart = () => {
     resetSession();
-    if (flashImages.length > 0) {
-      startFlashAnimation();
-    } else {
-      // フラッシュ画像がなければ直接プレイ開始
-      setPhase('playing');
-      fetchQuiz();
-    }
+    setPhase('playing');
+    fetchQuiz();
   };
 
   // 回答処理
@@ -144,7 +81,6 @@ export default function PlayPage() {
     const correct = answer === currentQuiz.answer;
     setResult(correct);
 
-    // Firestoreに保存
     try {
       await saveAnswer(user.uid, currentQuiz.id, correct);
     } catch (err) {
@@ -178,7 +114,6 @@ export default function PlayPage() {
           transition={{ duration: 0.5, ease: 'easeOut' }}
           className="flex flex-col items-center gap-4"
         >
-          {/* タイトルロゴ的表示 */}
           <div className="w-32 h-32 rounded-full bg-[var(--color-surface)] border-2 border-[var(--color-border)] flex items-center justify-center">
             <Sparkles className="w-16 h-16 text-[var(--color-text-muted)]" />
           </div>
@@ -199,7 +134,6 @@ export default function PlayPage() {
           </Button>
         </motion.div>
 
-        {/* スコア表示（前回の結果があれば） */}
         {totalAnswered > 0 && (
           <motion.p
             initial={{ opacity: 0 }}
@@ -214,53 +148,9 @@ export default function PlayPage() {
     );
   }
 
-  // 2. フラッシュアニメーション
-  if (phase === 'flash') {
-    const currentImage = flashImages[flashIndex % flashImages.length];
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 pt-4">
-        <h1 className="text-lg font-black flex items-center gap-2">
-          <Play className="w-5 h-5" />
-          あそぶ
-        </h1>
+  // 2. プレイ中
 
-        <motion.div
-          className="w-full aspect-square max-w-xs mx-auto rounded-[10px] overflow-hidden border-2 border-[var(--color-border)] bg-white relative"
-          animate={{ opacity: [0.7, 1, 0.7] }}
-          transition={{ duration: 0.12, repeat: Infinity }}
-        >
-          {currentImage && (
-            <Image
-              src={currentImage}
-              alt="フラッシュ"
-              fill
-              className="object-contain p-4"
-              sizes="(max-width: 448px) 100vw, 320px"
-              priority
-            />
-          )}
-        </motion.div>
-
-        {/* プログレスバー */}
-        <div className="w-full max-w-xs h-1.5 rounded-full bg-[var(--color-surface)] overflow-hidden">
-          <motion.div
-            className="h-full bg-[var(--color-text-primary)] rounded-full"
-            initial={{ width: '0%' }}
-            animate={{ width: '100%' }}
-            transition={{ duration: 2, ease: 'linear' }}
-          />
-        </div>
-
-        <p className="text-xs text-[var(--color-text-muted)] animate-pulse">
-          クイズをじゅんびちゅう...
-        </p>
-      </div>
-    );
-  }
-
-  // 3. プレイ中
-
-  // ローディング中（フラッシュ後、まだクイズ読み込み中）
+  // ローディング中
   if (isLoading && !currentQuiz) {
     return <Loading text="クイズを読み込み中..." />;
   }
