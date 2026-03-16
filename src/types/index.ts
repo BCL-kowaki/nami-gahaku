@@ -9,9 +9,17 @@ export interface UserProfile {
   uid: string;
   displayName: string;
   email: string;
-  totalScore: number;       // 累積正解数
-  totalAnswered: number;    // 累積回答数
+  birthday?: string;          // 誕生日 (YYYY-MM-DD)
+  totalScore: number;         // 累積正解数
+  totalAnswered: number;      // 累積回答数
   createdAt: Timestamp;
+}
+
+// --- クイズ解答統計 ---
+export interface QuizStats {
+  totalAnswered: number;      // 総回答数
+  totalCorrect: number;       // 正解数
+  accuracy: number;           // 正解率 (%)
 }
 
 // --- コレクション（ずかん）アイテム ---

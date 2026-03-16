@@ -19,6 +19,7 @@ import { db } from './config';
 import type {
   UserProfile,
   Quiz,
+  QuizStats,
   CollectionItem,
   AnsweredItem,
   Theme,
@@ -148,6 +149,24 @@ export async function saveAnswer(uid: string, quizId: string, isCorrect: boolean
 
   // スコア更新
   await incrementScore(uid, isCorrect);
+
+  // クイズ側の統計カウンターも更新
+  const quizStatsUpdate: Record<string, unknown> = {
+    statsTotalAnswered: increment(1),
+  };
+  if (isCorrect) {
+    quizStatsUpdate.statsTotalCorrect = increment(1);
+  }
+  await updateDoc(doc(db, 'quizzes', quizId), quizStatsUpdate);
+}
+
+// クイズの解答統計を取得
+export function getQuizStats(quiz: Quiz): QuizStats {
+  const raw = quiz as Quiz & { statsTotalAnswered?: number; statsTotalCorrect?: number };
+  const totalAnswered = raw.statsTotalAnswered ?? 0;
+  const totalCorrect = raw.statsTotalCorrect ?? 0;
+  const accuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
+  return { totalAnswered, totalCorrect, accuracy };
 }
 
 // ユーザーのコレクション取得
