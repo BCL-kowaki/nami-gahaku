@@ -24,6 +24,9 @@ import type {
   AnsweredItem,
   Theme,
   Fortune,
+  ChatRoom,
+  ChatMessageDoc,
+  UserMemory,
 } from '@/types';
 
 // ==================
@@ -364,4 +367,110 @@ export async function getRandomQuizImage(): Promise<{ imageUrl: string } | null>
   const randomIndex = Math.floor(Math.random() * snap.docs.length);
   const quizDoc = snap.docs[randomIndex];
   return { imageUrl: (quizDoc.data() as Quiz).imageUrl };
+}
+
+// ==================
+// チャットルーム関連
+// ==================
+
+// チャットルーム一覧取得
+export async function getChatRooms(uid: string): Promise<ChatRoom[]> {
+  const q = query(
+    collection(db, 'users', uid, 'chatRooms'),
+    orderBy('updatedAt', 'desc')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as ChatRoom);
+}
+
+// チャットルーム作成
+export async function createChatRoom(uid: string, title: string): Promise<string> {
+  const roomRef = doc(collection(db, 'users', uid, 'chatRooms'));
+  await setDoc(roomRef, {
+    uid,
+    title,
+    lastMessage: '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return roomRef.id;
+}
+
+// チャットルーム削除
+export async function deleteChatRoom(uid: string, roomId: string): Promise<void> {
+  // メッセージも全削除
+  const messagesSnap = await getDocs(
+    collection(db, 'users', uid, 'chatRooms', roomId, 'messages')
+  );
+  for (const msgDoc of messagesSnap.docs) {
+    await deleteDoc(doc(db, 'users', uid, 'chatRooms', roomId, 'messages', msgDoc.id));
+  }
+  // ルーム削除
+  await deleteDoc(doc(db, 'users', uid, 'chatRooms', roomId));
+}
+
+// チャットルームのタイトルと最終メッセージを更新
+export async function updateChatRoom(uid: string, roomId: string, data: { title?: string; lastMessage?: string }): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'chatRooms', roomId), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// チャットメッセージ一覧取得
+export async function getChatMessages(uid: string, roomId: string): Promise<ChatMessageDoc[]> {
+  const q = query(
+    collection(db, 'users', uid, 'chatRooms', roomId, 'messages'),
+    orderBy('createdAt', 'asc')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as ChatMessageDoc);
+}
+
+// チャットメッセージ保存
+export async function saveChatMessage(uid: string, roomId: string, message: Omit<ChatMessageDoc, 'id' | 'createdAt'>): Promise<string> {
+  const msgRef = doc(collection(db, 'users', uid, 'chatRooms', roomId, 'messages'));
+  await setDoc(msgRef, {
+    ...message,
+    createdAt: serverTimestamp(),
+  });
+  return msgRef.id;
+}
+
+// ==================
+// ユーザー学習メモリ
+// ==================
+
+// メモリ取得
+export async function getUserMemory(uid: string): Promise<UserMemory | null> {
+  const snap = await getDoc(doc(db, 'users', uid, 'settings', 'memory'));
+  if (!snap.exists()) return null;
+  return snap.data() as UserMemory;
+}
+
+// メモリ保存（追加）
+export async function addUserMemory(uid: string, memory: string): Promise<void> {
+  const existing = await getUserMemory(uid);
+  const memories = existing?.memories ?? [];
+
+  // 重複チェック & 最大50件制限
+  if (!memories.includes(memory)) {
+    memories.push(memory);
+    if (memories.length > 50) {
+      memories.shift(); // 古い記憶を削除
+    }
+  }
+
+  await setDoc(doc(db, 'users', uid, 'settings', 'memory'), {
+    uid,
+    memories,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// メモリ全取得（テキスト化）
+export async function getUserMemoryText(uid: string): Promise<string> {
+  const memory = await getUserMemory(uid);
+  if (!memory || memory.memories.length === 0) return '';
+  return memory.memories.join('\n');
 }

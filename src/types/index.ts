@@ -153,11 +153,38 @@ export interface Fortune {
   createdAt: Timestamp;
 }
 
-// --- チャットメッセージ ---
+// --- チャットルーム ---
+export interface ChatRoom {
+  id: string;
+  uid: string;
+  title: string;             // 最初のメッセージから自動生成
+  lastMessage: string;       // 最新メッセージのプレビュー
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// --- チャットメッセージ（Firestore保存用） ---
+export interface ChatMessageDoc {
+  id?: string;
+  roomId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  imageUrl?: string;         // 生成画像URL
+  createdAt: Timestamp;
+}
+
+// --- チャットメッセージ（フロントエンド表示用） ---
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   imageUrl?: string;         // 生成画像URL
   createdAt: Date;
+}
+
+// --- ユーザー学習メモリ ---
+export interface UserMemory {
+  uid: string;
+  memories: string[];        // 学習した情報のリスト
+  updatedAt: Timestamp;
 }
