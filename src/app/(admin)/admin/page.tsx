@@ -26,6 +26,7 @@ import {
 import { storage } from '@/lib/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import type { UserProfile, Quiz, QuizCategory } from '@/types';
+import { getEtoDisplayText } from '@/lib/zodiac';
 
 type Tab = 'users' | 'quizzes' | 'create' | 'settings';
 
@@ -390,7 +391,7 @@ export default function AdminPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold truncate">{u.displayName}</p>
                           <p className="text-[10px] text-[var(--color-text-muted)] truncate">{u.email}</p>
-                          {u.birthday && <p className="text-[10px] text-[var(--color-text-muted)]">🎂 {u.birthday}</p>}
+                          {u.birthday && <p className="text-[10px] text-[var(--color-text-muted)]">🎂 {u.birthday}　{getEtoDisplayText(u.birthday)}</p>}
                           <div className="flex gap-3 mt-1.5">
                             <span className="text-[10px] text-[var(--color-text-muted)]">正解 <span className="font-bold text-[var(--color-text-primary)]">{u.totalScore}</span></span>
                             <span className="text-[10px] text-[var(--color-text-muted)]">回答 <span className="font-bold text-[var(--color-text-primary)]">{u.totalAnswered}</span></span>

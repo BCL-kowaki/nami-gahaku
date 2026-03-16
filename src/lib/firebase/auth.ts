@@ -12,18 +12,23 @@ import { auth, db } from './config';
 import type { UserProfile } from '@/types';
 
 // サインアップ: Authユーザー作成 + Firestoreにユーザードキュメント作成
-export async function signUp(email: string, password: string, displayName: string): Promise<User> {
+export async function signUp(email: string, password: string, displayName: string, birthday?: string): Promise<User> {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   const user = credential.user;
 
   // Firestoreにユーザードキュメントを作成
-  const userDoc: Omit<UserProfile, 'uid' | 'createdAt'> & { createdAt: ReturnType<typeof serverTimestamp> } = {
+  const userDoc: Record<string, unknown> = {
     displayName,
     email,
     totalScore: 0,
     totalAnswered: 0,
     createdAt: serverTimestamp(),
   };
+
+  // 誕生日が入力されていれば追加
+  if (birthday) {
+    userDoc.birthday = birthday;
+  }
 
   await setDoc(doc(db, 'users', user.uid), userDoc);
   return user;

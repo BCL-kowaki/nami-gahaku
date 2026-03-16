@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/authStore';
 
 export default function SignupPage() {
   const [displayName, setDisplayName] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -36,7 +37,7 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      await signUp(email, password, displayName);
+      await signUp(email, password, displayName, birthday || undefined);
       await refreshProfile();
       router.push('/play');
     } catch {
@@ -75,6 +76,21 @@ export default function SignupPage() {
             minLength={2}
             maxLength={20}
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold mb-1 text-[var(--color-text-secondary)]">
+            誕生日
+          </label>
+          <input
+            type="date"
+            value={birthday}
+            onChange={(e) => setBirthday(e.target.value)}
+            className="input-field"
+          />
+          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+            占い機能で使うよ！（あとから設定もできます）
+          </p>
         </div>
 
         <div>

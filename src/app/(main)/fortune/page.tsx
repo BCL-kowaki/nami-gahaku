@@ -9,6 +9,7 @@ import Card from '@/components/ui/Card';
 import Loading from '@/components/ui/Loading';
 import { useAuthStore } from '@/stores/authStore';
 import { getTodayFortune, saveFortune, getRandomQuizImage } from '@/lib/firebase/firestore';
+import { getEtoDisplayText } from '@/lib/zodiac';
 import type { Fortune } from '@/types';
 
 export default function FortunePage() {
@@ -190,6 +191,11 @@ export default function FortunePage() {
 
             <div className="text-center">
               <h2 className="text-lg font-black mb-1">今日の運勢は...？</h2>
+              {profile?.birthday && (
+                <p className="text-sm font-bold mb-1">
+                  {getEtoDisplayText(profile.birthday)}
+                </p>
+              )}
               <p className="text-xs text-[var(--color-text-muted)]">
                 なみ画伯が占ってやるぜ！
               </p>

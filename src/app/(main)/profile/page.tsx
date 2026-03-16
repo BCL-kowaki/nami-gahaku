@@ -15,6 +15,7 @@ import Loading from '@/components/ui/Loading';
 import { useAuthStore } from '@/stores/authStore';
 import { logOut, changeEmail, changePassword } from '@/lib/firebase/auth';
 import { updateUserProfile } from '@/lib/firebase/firestore';
+import { getEtoDisplayText } from '@/lib/zodiac';
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
@@ -196,7 +197,9 @@ export default function ProfilePage() {
             <h2 className="font-bold truncate">{profile.displayName}</h2>
             <p className="text-xs text-[var(--color-text-muted)] truncate">{profile.email}</p>
             {profile.birthday && (
-              <p className="text-xs text-[var(--color-text-muted)]">🎂 {profile.birthday}</p>
+              <p className="text-xs text-[var(--color-text-muted)]">
+                🎂 {profile.birthday}　{getEtoDisplayText(profile.birthday)}
+              </p>
             )}
           </div>
           <button
