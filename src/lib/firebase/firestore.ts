@@ -29,6 +29,16 @@ import type {
   UserMemory,
 } from '@/types';
 
+// Firestore Timestamp を安全にミリ秒に変換するヘルパー
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function safeTimestampMillis(ts: any): number {
+  if (!ts) return 0;
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  if (ts instanceof Date) return ts.getTime();
+  return 0;
+}
+
 // ==================
 // ユーザー関連
 // ==================
@@ -134,8 +144,8 @@ export async function getUserQuizzes(uid: string): Promise<Quiz[]> {
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as Quiz)
     .sort((a, b) => {
-      const aTime = a.createdAt?.toMillis?.() ?? 0;
-      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      const aTime = safeTimestampMillis(a.createdAt);
+      const bTime = safeTimestampMillis(b.createdAt);
       return bTime - aTime;
     });
 }
@@ -244,8 +254,8 @@ export async function getAllQuizzes(): Promise<Quiz[]> {
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as Quiz)
     .sort((a, b) => {
-      const aTime = a.createdAt?.toMillis?.() ?? 0;
-      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      const aTime = safeTimestampMillis(a.createdAt);
+      const bTime = safeTimestampMillis(b.createdAt);
       return bTime - aTime;
     });
 }
@@ -278,8 +288,8 @@ export async function getAllUsers(): Promise<UserProfile[]> {
   return snap.docs
     .map(d => ({ uid: d.id, ...d.data() }) as UserProfile)
     .sort((a, b) => {
-      const aTime = a.createdAt?.toMillis?.() ?? 0;
-      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      const aTime = safeTimestampMillis(a.createdAt);
+      const bTime = safeTimestampMillis(b.createdAt);
       return bTime - aTime;
     });
 }
@@ -290,8 +300,8 @@ export async function getAllQuizzesAdmin(): Promise<Quiz[]> {
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }) as Quiz)
     .sort((a, b) => {
-      const aTime = a.createdAt?.toMillis?.() ?? 0;
-      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      const aTime = safeTimestampMillis(a.createdAt);
+      const bTime = safeTimestampMillis(b.createdAt);
       return bTime - aTime;
     });
 }

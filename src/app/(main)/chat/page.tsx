@@ -93,7 +93,7 @@ export default function ChatPage() {
         role: m.role,
         content: m.content,
         imageUrl: m.imageUrl,
-        createdAt: m.createdAt?.toDate?.() || new Date(),
+        createdAt: m.createdAt?.toDate?.() || (m.createdAt?.seconds ? new Date(m.createdAt.seconds * 1000) : new Date()),
       })));
     } catch (err) {
       console.error('メッセージ取得エラー:', err);
