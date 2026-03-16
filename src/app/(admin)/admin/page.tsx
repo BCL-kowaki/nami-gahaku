@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Users, ImageIcon, Settings, LogOut, Pencil,
   Check, Eye, EyeOff, Save, BarChart3, AlertTriangle,
-  Upload, ArrowLeft, ArrowRight, Send,
+  Upload, ArrowLeft, ArrowRight, Send, Trash2,
 } from 'lucide-react';
 import Image from 'next/image';
 import Button from '@/components/ui/Button';
@@ -19,6 +19,7 @@ import {
   getAdminSettings,
   updateAdminSettings,
   updateQuiz,
+  deleteQuiz,
   createQuiz,
   migrateExistingQuizzesToOfficial,
   type AdminSettings,
@@ -159,6 +160,29 @@ export default function AdminPage() {
       console.error('設定更新エラー:', err);
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  // クイズ削除確認
+  const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
+
+  const handleDeleteQuiz = async (quizId: string) => {
+    if (deletingQuizId === quizId) {
+      // 2回目タップ → 実際に削除
+      try {
+        await deleteQuiz(quizId);
+        setQuizzes(prev => prev.filter(q => q.id !== quizId));
+        showMessage('クイズを削除しました');
+      } catch (err) {
+        console.error('クイズ削除エラー:', err);
+      } finally {
+        setDeletingQuizId(null);
+      }
+    } else {
+      // 1回目タップ → 確認状態にする
+      setDeletingQuizId(quizId);
+      // 3秒後に確認状態をリセット
+      setTimeout(() => setDeletingQuizId(prev => prev === quizId ? null : prev), 3000);
     }
   };
 
@@ -463,13 +487,26 @@ export default function AdminPage() {
                           投稿: {formatTimestamp(quiz.createdAt)}
                         </p>
                       </div>
-                      <button
-                        onClick={() => quiz.id && handleToggleQuizHidden(quiz.id, isHidden)}
-                        className="p-1.5 rounded-[5px] hover:bg-[var(--color-surface)] transition-colors flex-shrink-0"
-                        title={isHidden ? '表示する' : '非表示にする'}
-                      >
-                        {isHidden ? <Eye className="w-4 h-4 text-[var(--color-text-muted)]" /> : <EyeOff className="w-4 h-4 text-[var(--color-text-muted)]" />}
-                      </button>
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => quiz.id && handleToggleQuizHidden(quiz.id, isHidden)}
+                          className="p-1.5 rounded-[5px] hover:bg-[var(--color-surface)] transition-colors"
+                          title={isHidden ? '表示する' : '非表示にする'}
+                        >
+                          {isHidden ? <Eye className="w-4 h-4 text-[var(--color-text-muted)]" /> : <EyeOff className="w-4 h-4 text-[var(--color-text-muted)]" />}
+                        </button>
+                        <button
+                          onClick={() => quiz.id && handleDeleteQuiz(quiz.id)}
+                          className={`p-1.5 rounded-[5px] transition-colors ${
+                            deletingQuizId === quiz.id
+                              ? 'bg-[var(--color-incorrect)] text-white'
+                              : 'hover:bg-[var(--color-surface)]'
+                          }`}
+                          title={deletingQuizId === quiz.id ? 'もう一度タップで削除' : '削除'}
+                        >
+                          <Trash2 className={`w-4 h-4 ${deletingQuizId === quiz.id ? '' : 'text-[var(--color-text-muted)]'}`} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
