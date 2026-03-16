@@ -8,6 +8,8 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import { useAuthStore } from '@/stores/authStore';
 import { createQuiz } from '@/lib/firebase/firestore';
+import { storage } from '@/lib/firebase/config';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import type { QuizCategory } from '@/types';
 
 const CATEGORIES: QuizCategory[] = [
@@ -108,27 +110,22 @@ export default function CreatePage() {
     setError('');
 
     try {
-      // 画像をStorageにアップロード
-      const uploadRes = await fetch('/api/image/upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-uid': user.uid,
-        },
-        body: JSON.stringify({
-          imageBase64: processedImage.replace(/^data:image\/\w+;base64,/, ''),
-        }),
-      });
-      const uploadData = await uploadRes.json();
+      // 画像をクライアント側から直接Firebase Storageにアップロード
+      const base64Data = processedImage.replace(/^data:image\/\w+;base64,/, '');
+      const byteString = atob(base64Data);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      const blob = new Blob([ab], { type: 'image/png' });
 
-      if (!uploadData.success) {
-        setError('画像のアップロードに失敗しました');
-        return;
-      }
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
+      const storageRef = ref(storage, `quiz-images/${user.uid}/${fileName}`);
+      await uploadBytes(storageRef, blob, { contentType: 'image/png' });
+      const imageUrl = await getDownloadURL(storageRef);
 
       // クイズ作成
       await createQuiz({
-        imageUrl: uploadData.data.url,
+        imageUrl,
         originalImageUrl: imagePreview,
         answer,
         category,
