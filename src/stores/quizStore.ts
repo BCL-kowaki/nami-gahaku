@@ -2,6 +2,11 @@
 import { create } from 'zustand';
 import type { QuizDisplay } from '@/types';
 
+// 定数
+export const QUIZ_PER_ROUND = 5;        // 1回あたりの問題数
+export const POINTS_PER_QUESTION = 20;   // 1問あたりの得点
+export const MAX_SCORE = QUIZ_PER_ROUND * POINTS_PER_QUESTION; // 100点満点
+
 interface QuizState {
   currentQuiz: QuizDisplay | null;
   selectedAnswer: string | null;
@@ -17,9 +22,13 @@ interface QuizState {
   nextQuiz: () => void;
   resetSession: () => void;
   setLoading: (loading: boolean) => void;
+
+  // 計算プロパティ用
+  getPoints: () => number;
+  isRoundComplete: () => boolean;
 }
 
-export const useQuizStore = create<QuizState>((set) => ({
+export const useQuizStore = create<QuizState>((set, get) => ({
   currentQuiz: null,
   selectedAnswer: null,
   isAnswered: false,
@@ -62,4 +71,10 @@ export const useQuizStore = create<QuizState>((set) => ({
   }),
 
   setLoading: (loading) => set({ isLoading: loading }),
+
+  // 得点（正解数 × 1問あたりのポイント）
+  getPoints: () => get().score * POINTS_PER_QUESTION,
+
+  // ラウンド完了判定（5問回答済み）
+  isRoundComplete: () => get().totalAnswered >= QUIZ_PER_ROUND,
 }));

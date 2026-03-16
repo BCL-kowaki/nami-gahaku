@@ -57,8 +57,8 @@ export default function LoginPage() {
         <Image
           src="/logo.png"
           alt="なみ画伯"
-          width={200}
-          height={200}
+          width={280}
+          height={280}
           priority
         />
       </div>
@@ -89,7 +89,6 @@ export default function LoginPage() {
             className="input-field"
             placeholder="パスワードを入力"
             required
-            minLength={6}
           />
         </div>
 

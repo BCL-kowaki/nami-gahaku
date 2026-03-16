@@ -183,8 +183,8 @@ export default function FortunePage() {
               <Image
                 src="/logo.png"
                 alt="なみ画伯"
-                width={96}
-                height={96}
+                width={160}
+                height={160}
               />
             </motion.div>
 

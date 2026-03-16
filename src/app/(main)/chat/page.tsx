@@ -348,8 +348,8 @@ export default function ChatPage() {
             <Image
               src="/logo.png"
               alt="なみ画伯"
-              width={64}
-              height={64}
+              width={100}
+              height={100}
             />
             <div>
               <p className="font-bold text-sm">なみ画伯とおしゃべり！</p>
@@ -373,8 +373,8 @@ export default function ChatPage() {
                   onClick={() => handleSelectRoom(room)}
                   className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface)] transition-colors text-left"
                 >
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    <Image src="/logo.png" alt="なみ画伯" width={32} height={32} />
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <Image src="/logo.png" alt="なみ画伯" width={40} height={40} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold truncate">{room.title}</p>
@@ -432,8 +432,8 @@ export default function ChatPage() {
             <Image
               src="/logo.png"
               alt="なみ画伯"
-              width={64}
-              height={64}
+              width={100}
+              height={100}
             />
             <div>
               <p className="font-bold text-sm">なみ画伯とおしゃべり！</p>
@@ -453,8 +453,8 @@ export default function ChatPage() {
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center mr-2 flex-shrink-0 overflow-hidden">
-                  <Image src="/logo.png" alt="なみ画伯" width={32} height={32} />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center mr-2 flex-shrink-0 overflow-hidden">
+                  <Image src="/logo.png" alt="なみ画伯" width={40} height={40} />
                 </div>
               )}
               <div
@@ -488,8 +488,8 @@ export default function ChatPage() {
             animate={{ opacity: 1 }}
             className="flex items-center gap-2"
           >
-            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
-              <Image src="/logo.png" alt="なみ画伯" width={32} height={32} />
+            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+              <Image src="/logo.png" alt="なみ画伯" width={40} height={40} />
             </div>
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[10px] px-3 py-2">
               <div className="flex items-center gap-2">
