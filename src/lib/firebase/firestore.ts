@@ -55,68 +55,28 @@ export async function incrementScore(uid: string, isCorrect: boolean): Promise<v
 // クイズ関連
 // ==================
 
-// ランダムにクイズ1問取得（改善案1: randomSeedを使用）
+// ランダムにクイズ1問取得（インデックス不要な方式）
 export async function getRandomQuiz(uid: string): Promise<Quiz | null> {
-  const seed = Math.random();
-
-  // randomSeed >= seed で1件取得（非表示は除外）
-  let q = query(
+  // isHidden==false のクイズのみ取得（等値フィルタ＋orderByでインデックス不要）
+  const q = query(
     collection(db, 'quizzes'),
-    where('isHidden', '!=', true),
-    where('randomSeed', '>=', seed),
-    orderBy('randomSeed'),
-    limit(1)
+    where('isHidden', '==', false),
+    limit(50)
   );
-
-  let snap = await getDocs(q);
-
-  // 見つからない場合は逆方向で検索
-  if (snap.empty) {
-    q = query(
-      collection(db, 'quizzes'),
-      where('isHidden', '!=', true),
-      where('randomSeed', '<', seed),
-      orderBy('randomSeed', 'desc'),
-      limit(1)
-    );
-    snap = await getDocs(q);
-  }
+  const snap = await getDocs(q);
 
   if (snap.empty) return null;
 
-  const quizDoc = snap.docs[0];
-  const quiz = { id: quizDoc.id, ...quizDoc.data() } as Quiz;
+  // クライアント側でシャッフルして未回答のクイズを探す
+  const shuffled = [...snap.docs].sort(() => Math.random() - 0.5);
 
-  // 既回答チェック（改善案2: リトライ方式）
-  const answeredSnap = await getDoc(doc(db, 'users', uid, 'answered', quizDoc.id));
-  if (answeredSnap.exists()) {
-    // 既回答なら別のクイズを試行（最大5回）
-    return retryGetRandomQuiz(uid, 5);
-  }
-
-  return quiz;
-}
-
-// リトライ方式でランダムクイズ取得
-async function retryGetRandomQuiz(uid: string, retries: number): Promise<Quiz | null> {
-  for (let i = 0; i < retries; i++) {
-    const seed = Math.random();
-    const q = query(
-      collection(db, 'quizzes'),
-      where('isHidden', '!=', true),
-      where('randomSeed', '>=', seed),
-      orderBy('randomSeed'),
-      limit(3)
-    );
-    const snap = await getDocs(q);
-
-    for (const quizDoc of snap.docs) {
-      const answeredSnap = await getDoc(doc(db, 'users', uid, 'answered', quizDoc.id));
-      if (!answeredSnap.exists()) {
-        return { id: quizDoc.id, ...quizDoc.data() } as Quiz;
-      }
+  for (const quizDoc of shuffled) {
+    const answeredSnap = await getDoc(doc(db, 'users', uid, 'answered', quizDoc.id));
+    if (!answeredSnap.exists()) {
+      return { id: quizDoc.id, ...quizDoc.data() } as Quiz;
     }
   }
+
   return null; // 全問回答済み
 }
 
@@ -137,11 +97,17 @@ export async function createQuiz(data: Omit<Quiz, 'id' | 'createdAt' | 'reportCo
 export async function getUserQuizzes(uid: string): Promise<Quiz[]> {
   const q = query(
     collection(db, 'quizzes'),
-    where('creatorUid', '==', uid),
-    orderBy('createdAt', 'desc')
+    where('creatorUid', '==', uid)
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Quiz);
+  // クライアント側で日付順にソート（複合インデックス不要）
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }) as Quiz)
+    .sort((a, b) => {
+      const aTime = a.createdAt?.toMillis?.() ?? 0;
+      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      return bTime - aTime;
+    });
 }
 
 // クイズ削除
@@ -223,11 +189,17 @@ export async function getRandomTheme(): Promise<Theme | null> {
 export async function getAllQuizzes(): Promise<Quiz[]> {
   const q = query(
     collection(db, 'quizzes'),
-    where('isHidden', '!=', true),
-    orderBy('createdAt', 'desc')
+    where('isHidden', '==', false)
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Quiz);
+  // クライアント側で日付順にソート（複合インデックス不要）
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }) as Quiz)
+    .sort((a, b) => {
+      const aTime = a.createdAt?.toMillis?.() ?? 0;
+      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      return bTime - aTime;
+    });
 }
 
 // クイズ通報

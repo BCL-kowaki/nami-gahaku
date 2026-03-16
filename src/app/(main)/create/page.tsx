@@ -111,10 +111,12 @@ export default function CreatePage() {
       // 画像をStorageにアップロード
       const uploadRes = await fetch('/api/image/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-uid': user.uid,
+        },
         body: JSON.stringify({
           imageBase64: processedImage.replace(/^data:image\/\w+;base64,/, ''),
-          uid: user.uid,
         }),
       });
       const uploadData = await uploadRes.json();
