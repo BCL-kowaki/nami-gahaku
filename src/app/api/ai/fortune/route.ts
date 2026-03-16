@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
 JSONだけを返してください。`;
 
-    const model = getModel('gemini-3-pro');
+    const model = getModel('gemini-2.5-pro');
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
 

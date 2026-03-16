@@ -4,19 +4,19 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 // テキスト生成用モデル
-export const getModel = (modelName = 'gemini-3-pro') => {
+export const getModel = (modelName = 'gemini-2.5-pro') => {
   return genAI.getGenerativeModel({ model: modelName });
 };
 
-// チャット用モデル（gemini-3-pro）
+// チャット用モデル（gemini-2.5-pro）
 export const getChatModel = (history: { role: string; parts: { text: string }[] }[] = []) => {
-  return genAI.getGenerativeModel({ model: 'gemini-3-pro' }).startChat({
+  return genAI.getGenerativeModel({ model: 'gemini-2.5-pro' }).startChat({
     history,
     generationConfig: { maxOutputTokens: 1000, temperature: 0.8 },
   });
 };
 
-// 画像生成用モデル（gemini-3-pro-image-preview）
+// 画像生成用モデル（gemini-3-pro-image-preview = Nano Banana Pro）
 export const getImageModel = () => {
   return genAI.getGenerativeModel({
     model: 'gemini-3-pro-image-preview',
