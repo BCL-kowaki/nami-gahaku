@@ -282,11 +282,29 @@ export async function updateAdminSettings(data: AdminSettings): Promise<void> {
   await setDoc(doc(db, 'settings', 'admin'), data);
 }
 
-// 全ユーザー取得（管理者用）
+// Firestore Timestamp を安全に文字列に変換するヘルパー
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function safeTimestampToString(ts: any): string {
+  if (!ts) return '';
+  if (typeof ts.toDate === 'function') return ts.toDate().toISOString();
+  if (typeof ts.seconds === 'number') return new Date(ts.seconds * 1000).toISOString();
+  if (ts instanceof Date) return ts.toISOString();
+  return '';
+}
+
+// 全ユーザー取得（管理者用）- Timestampをシリアライズ済みで返す
 export async function getAllUsers(): Promise<UserProfile[]> {
   const snap = await getDocs(collection(db, 'users'));
   return snap.docs
-    .map(d => ({ uid: d.id, ...d.data() }) as UserProfile)
+    .map(d => {
+      const data = d.data();
+      return {
+        uid: d.id,
+        ...data,
+        // createdAtを安全な文字列に変換（ReactがTimestampオブジェクトをレンダリングしないように）
+        createdAt: safeTimestampToString(data.createdAt),
+      } as unknown as UserProfile;
+    })
     .sort((a, b) => {
       const aTime = safeTimestampMillis(a.createdAt);
       const bTime = safeTimestampMillis(b.createdAt);
@@ -294,11 +312,19 @@ export async function getAllUsers(): Promise<UserProfile[]> {
     });
 }
 
-// 全クイズ取得（管理者用: 非表示含む）
+// 全クイズ取得（管理者用: 非表示含む）- Timestampをシリアライズ済みで返す
 export async function getAllQuizzesAdmin(): Promise<Quiz[]> {
   const snap = await getDocs(collection(db, 'quizzes'));
   return snap.docs
-    .map(d => ({ id: d.id, ...d.data() }) as Quiz)
+    .map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        // createdAtを安全な文字列に変換（ReactがTimestampオブジェクトをレンダリングしないように）
+        createdAt: safeTimestampToString(data.createdAt),
+      } as unknown as Quiz;
+    })
     .sort((a, b) => {
       const aTime = safeTimestampMillis(a.createdAt);
       const bTime = safeTimestampMillis(b.createdAt);

@@ -33,6 +33,14 @@ type Tab = 'users' | 'quizzes' | 'create' | 'settings';
 // Firestore Timestamp を安全に日付文字列に変換
 function formatTimestamp(ts: unknown): string {
   if (!ts) return '不明';
+  // ISO文字列（safeTimestampToString で変換済み）
+  if (typeof ts === 'string') {
+    try {
+      return new Date(ts).toLocaleDateString('ja-JP');
+    } catch {
+      return ts;
+    }
+  }
   // Timestamp オブジェクト（toDate メソッドあり）
   if (typeof ts === 'object' && ts !== null && 'toDate' in ts && typeof (ts as { toDate: () => Date }).toDate === 'function') {
     return (ts as { toDate: () => Date }).toDate().toLocaleDateString('ja-JP');

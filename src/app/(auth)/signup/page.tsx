@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Eye, EyeOff } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { signUp } from '@/lib/firebase/auth';
 import { useAuthStore } from '@/stores/authStore';
@@ -17,6 +17,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
 
@@ -111,15 +112,24 @@ export default function SignupPage() {
           <label className="block text-xs font-bold mb-1 text-[var(--color-text-secondary)]">
             パスワード
           </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input-field"
-            placeholder="6文字以上"
-            required
-            minLength={6}
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="input-field pr-10"
+              placeholder="6文字以上"
+              required
+              minLength={6}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
         <div>
@@ -127,7 +137,7 @@ export default function SignupPage() {
             パスワード（確認）
           </label>
           <input
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             className="input-field"
