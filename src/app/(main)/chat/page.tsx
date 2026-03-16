@@ -313,8 +313,12 @@ export default function ChatPage() {
   // 画像ダウンロード（720x480にリサイズ）
   const handleDownloadImage = async (imageUrl: string) => {
     try {
+      // Firebase Storage URLはCORS制限があるのでfetchでBlobとして取得
+      const res = await fetch(imageUrl);
+      const blob = await res.blob();
+      const bitmapUrl = URL.createObjectURL(blob);
+
       const img = new window.Image();
-      img.crossOrigin = 'anonymous';
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const TARGET_W = 720;
@@ -322,7 +326,7 @@ export default function ChatPage() {
         canvas.width = TARGET_W;
         canvas.height = TARGET_H;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!ctx) { URL.revokeObjectURL(bitmapUrl); return; }
 
         // 白背景で塗りつぶし
         ctx.fillStyle = '#ffffff';
@@ -337,14 +341,29 @@ export default function ChatPage() {
         ctx.drawImage(img, x, y, w, h);
 
         // ダウンロード
-        const link = document.createElement('a');
-        link.download = `nami-art-${Date.now()}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        canvas.toBlob((canvasBlob) => {
+          if (!canvasBlob) return;
+          const downloadUrl = URL.createObjectURL(canvasBlob);
+          const link = document.createElement('a');
+          link.download = `nami-art-${Date.now()}.png`;
+          link.href = downloadUrl;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(downloadUrl);
+        }, 'image/png');
+
+        URL.revokeObjectURL(bitmapUrl);
       };
-      img.src = imageUrl;
-    } catch (err) {
-      console.error('画像ダウンロードエラー:', err);
+      img.onerror = () => {
+        // CORSでfetchも失敗する場合はリンクを新タブで開く
+        URL.revokeObjectURL(bitmapUrl);
+        window.open(imageUrl, '_blank');
+      };
+      img.src = bitmapUrl;
+    } catch {
+      // フォールバック: 新しいタブで画像を開く
+      window.open(imageUrl, '_blank');
     }
   };
 

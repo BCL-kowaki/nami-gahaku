@@ -282,29 +282,40 @@ export async function updateAdminSettings(data: AdminSettings): Promise<void> {
   await setDoc(doc(db, 'settings', 'admin'), data);
 }
 
-// Firestore Timestamp を安全に文字列に変換するヘルパー
+// Firestoreドキュメントの全フィールドを再帰的にサニタイズ
+// Timestamp型（{seconds, nanoseconds} やクラスインスタンス）をISO文字列に変換
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function safeTimestampToString(ts: any): string {
-  if (!ts) return '';
-  if (typeof ts.toDate === 'function') return ts.toDate().toISOString();
-  if (typeof ts.seconds === 'number') return new Date(ts.seconds * 1000).toISOString();
-  if (ts instanceof Date) return ts.toISOString();
-  return '';
+function sanitizeFirestoreData(data: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value === null || value === undefined) {
+      result[key] = value;
+    } else if (typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+      // Firestore Timestamp クラスインスタンス
+      result[key] = value.toDate().toISOString();
+    } else if (typeof value === 'object' && 'seconds' in value && 'nanoseconds' in value && typeof value.seconds === 'number') {
+      // プレーン {seconds, nanoseconds} オブジェクト
+      result[key] = new Date(value.seconds * 1000).toISOString();
+    } else if (Array.isArray(value)) {
+      result[key] = value;
+    } else if (typeof value === 'object' && !(value instanceof Date)) {
+      // ネストされたオブジェクトも再帰サニタイズ
+      result[key] = sanitizeFirestoreData(value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
-// 全ユーザー取得（管理者用）- Timestampをシリアライズ済みで返す
+// 全ユーザー取得（管理者用）- 全Timestampをサニタイズ済みで返す
 export async function getAllUsers(): Promise<UserProfile[]> {
   const snap = await getDocs(collection(db, 'users'));
   return snap.docs
-    .map(d => {
-      const data = d.data();
-      return {
-        uid: d.id,
-        ...data,
-        // createdAtを安全な文字列に変換（ReactがTimestampオブジェクトをレンダリングしないように）
-        createdAt: safeTimestampToString(data.createdAt),
-      } as unknown as UserProfile;
-    })
+    .map(d => ({
+      uid: d.id,
+      ...sanitizeFirestoreData(d.data()),
+    } as unknown as UserProfile))
     .sort((a, b) => {
       const aTime = safeTimestampMillis(a.createdAt);
       const bTime = safeTimestampMillis(b.createdAt);
@@ -312,19 +323,14 @@ export async function getAllUsers(): Promise<UserProfile[]> {
     });
 }
 
-// 全クイズ取得（管理者用: 非表示含む）- Timestampをシリアライズ済みで返す
+// 全クイズ取得（管理者用: 非表示含む）- 全Timestampをサニタイズ済みで返す
 export async function getAllQuizzesAdmin(): Promise<Quiz[]> {
   const snap = await getDocs(collection(db, 'quizzes'));
   return snap.docs
-    .map(d => {
-      const data = d.data();
-      return {
-        id: d.id,
-        ...data,
-        // createdAtを安全な文字列に変換（ReactがTimestampオブジェクトをレンダリングしないように）
-        createdAt: safeTimestampToString(data.createdAt),
-      } as unknown as Quiz;
-    })
+    .map(d => ({
+      id: d.id,
+      ...sanitizeFirestoreData(d.data()),
+    } as unknown as Quiz))
     .sort((a, b) => {
       const aTime = safeTimestampMillis(a.createdAt);
       const bTime = safeTimestampMillis(b.createdAt);
