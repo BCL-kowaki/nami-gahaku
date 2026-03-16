@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 // テキスト生成用モデル
-export const getModel = (modelName = 'gemini-2.0-flash') => {
+export const getModel = (modelName = 'gemini-3-pro') => {
   return genAI.getGenerativeModel({ model: modelName });
 };
 
