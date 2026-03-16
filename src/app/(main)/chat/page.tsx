@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageCircle, Send, Trash2, Loader2,
-  Plus, ArrowLeft, ChevronRight,
+  Plus, ArrowLeft, ChevronRight, Download,
 } from 'lucide-react';
 import Image from 'next/image';
 import Button from '@/components/ui/Button';
@@ -310,6 +310,44 @@ export default function ChatPage() {
     }
   };
 
+  // 画像ダウンロード（720x480にリサイズ）
+  const handleDownloadImage = async (imageUrl: string) => {
+    try {
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const TARGET_W = 720;
+        const TARGET_H = 480;
+        canvas.width = TARGET_W;
+        canvas.height = TARGET_H;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // 白背景で塗りつぶし
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, TARGET_W, TARGET_H);
+
+        // アスペクト比を維持して中央にフィット
+        const scale = Math.min(TARGET_W / img.width, TARGET_H / img.height) * 0.9;
+        const w = img.width * scale;
+        const h = img.height * scale;
+        const x = (TARGET_W - w) / 2;
+        const y = (TARGET_H - h) / 2;
+        ctx.drawImage(img, x, y, w, h);
+
+        // ダウンロード
+        const link = document.createElement('a');
+        link.download = `nami-art-${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      };
+      img.src = imageUrl;
+    } catch (err) {
+      console.error('画像ダウンロードエラー:', err);
+    }
+  };
+
   // Enterキーで送信
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
@@ -450,33 +488,49 @@ export default function ChatPage() {
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
             >
-              {msg.role === 'assistant' && (
-                <div className="w-10 h-10 rounded-full flex items-center justify-center mr-2 flex-shrink-0 overflow-hidden">
-                  <Image src="/logo.png" alt="なみ画伯" width={40} height={40} />
-                </div>
-              )}
-              <div
-                className={`max-w-[75%] rounded-[10px] px-3 py-2 ${
-                  msg.role === 'user'
-                    ? 'bg-[var(--color-text-primary)] text-white'
-                    : 'bg-[var(--color-surface)] border border-[var(--color-border)]'
-                }`}
-              >
-                <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
-                {msg.imageUrl && (
-                  <div className="mt-2 relative w-full aspect-square max-w-[200px] bg-white rounded-[5px] overflow-hidden border border-[var(--color-border)]">
-                    <Image
-                      src={msg.imageUrl}
-                      alt="生成画像"
-                      fill
-                      className="object-contain p-1"
-                      sizes="200px"
-                    />
+              {/* テキスト吹き出し */}
+              <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {msg.role === 'assistant' && (
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center mr-2 flex-shrink-0 overflow-hidden">
+                    <Image src="/logo.png" alt="なみ画伯" width={40} height={40} />
                   </div>
                 )}
+                <div
+                  className={`max-w-[75%] rounded-[10px] px-3 py-2 ${
+                    msg.role === 'user'
+                      ? 'bg-[var(--color-text-primary)] text-white'
+                      : 'bg-[var(--color-surface)] border border-[var(--color-border)]'
+                  }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                </div>
               </div>
+
+              {/* 生成画像（吹き出しの外に独立表示） */}
+              {msg.imageUrl && (
+                <div className={`mt-2 ${msg.role === 'assistant' ? 'ml-12' : ''}`}>
+                  <div className="bg-white rounded-[10px] border border-[var(--color-border)] overflow-hidden shadow-sm">
+                    <div className="relative w-[240px] aspect-[3/2] bg-white">
+                      <Image
+                        src={msg.imageUrl}
+                        alt="なみ画伯の絵"
+                        fill
+                        className="object-contain p-2"
+                        sizes="240px"
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleDownloadImage(msg.imageUrl!)}
+                      className="flex items-center justify-center gap-1.5 w-full py-2 border-t border-[var(--color-border)] text-xs font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      ほぞんする
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>
