@@ -8,6 +8,7 @@ import { LogIn } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { logIn } from '@/lib/firebase/auth';
 import { useAuthStore } from '@/stores/authStore';
+import { getAdminSettings } from '@/lib/firebase/firestore';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -23,6 +24,17 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // 管理者ログインチェック
+      const adminSettings = await getAdminSettings();
+      const adminId = adminSettings?.adminId ?? 'admin';
+      const adminPass = adminSettings?.adminPassword ?? 'admin';
+
+      if (email === adminId && password === adminPass) {
+        sessionStorage.setItem('nami-admin', 'true');
+        router.push('/admin');
+        return;
+      }
+
       await logIn(email, password);
       await refreshProfile();
       router.push('/play');

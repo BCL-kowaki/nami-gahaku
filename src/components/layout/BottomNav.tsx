@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Play, BookOpen, Pencil, User } from 'lucide-react';
+import { Play, BookOpen, Star, MessageCircle, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const tabs = [
   { href: '/play', label: 'あそぶ', icon: Play },
   { href: '/collection', label: 'ずかん', icon: BookOpen },
-  { href: '/create', label: 'つくる', icon: Pencil },
+  { href: '/fortune', label: 'うらなう', icon: Star },
+  { href: '/chat', label: 'はなす', icon: MessageCircle },
   { href: '/profile', label: 'ぷろふ', icon: User },
 ] as const;
 
@@ -19,7 +20,7 @@ export default function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--color-border)] bg-white/95 backdrop-blur-sm">
       <div className="mx-auto max-w-md flex">
         {tabs.map(({ href, label, icon: Icon }) => {
-          const isActive = pathname === href;
+          const isActive = pathname === href || pathname.startsWith(href + '/');
           return (
             <Link
               key={href}

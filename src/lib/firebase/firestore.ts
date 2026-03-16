@@ -23,6 +23,7 @@ import type {
   CollectionItem,
   AnsweredItem,
   Theme,
+  Fortune,
 } from '@/types';
 
 // ==================
@@ -57,7 +58,8 @@ export async function incrementScore(uid: string, isCorrect: boolean): Promise<v
 // ==================
 
 // ランダムにクイズ1問取得（インデックス不要な方式）
-export async function getRandomQuiz(uid: string): Promise<Quiz | null> {
+// skipAnswered: true → 正解済みクイズをスキップ / false → 全未回答を対象
+export async function getRandomQuiz(uid: string, skipAnswered?: boolean): Promise<Quiz | null> {
   // isHidden==false のクイズのみ取得（等値フィルタ＋orderByでインデックス不要）
   const q = query(
     collection(db, 'quizzes'),
@@ -73,12 +75,36 @@ export async function getRandomQuiz(uid: string): Promise<Quiz | null> {
 
   for (const quizDoc of shuffled) {
     const answeredSnap = await getDoc(doc(db, 'users', uid, 'answered', quizDoc.id));
-    if (!answeredSnap.exists()) {
-      return { id: quizDoc.id, ...quizDoc.data() } as Quiz;
+    if (skipAnswered) {
+      // 正解済みスキップモード: 正解したクイズは飛ばす
+      if (answeredSnap.exists()) {
+        const data = answeredSnap.data() as AnsweredItem;
+        if (data.isCorrect) continue; // 正解済み → スキップ
+      }
+    } else {
+      // 通常モード: 回答済み（正解・不正解問わず）をスキップ
+      if (answeredSnap.exists()) continue;
     }
+    return { id: quizDoc.id, ...quizDoc.data() } as Quiz;
   }
 
   return null; // 全問回答済み
+}
+
+// フラッシュアニメーション用: ランダムなクイズ画像URLを複数取得
+export async function getQuizImagesForFlash(count: number = 10): Promise<string[]> {
+  const q = query(
+    collection(db, 'quizzes'),
+    where('isHidden', '==', false),
+    limit(50)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return [];
+
+  const allImages = snap.docs.map(d => (d.data() as Quiz).imageUrl);
+  // シャッフルして指定数を返す
+  const shuffled = [...allImages].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.min(count, shuffled.length));
 }
 
 // クイズ作成
@@ -221,6 +247,67 @@ export async function getAllQuizzes(): Promise<Quiz[]> {
     });
 }
 
+// ==================
+// 管理者関連
+// ==================
+
+// 管理者設定の型
+export interface AdminSettings {
+  adminId: string;
+  adminPassword: string;
+}
+
+// 管理者設定を取得
+export async function getAdminSettings(): Promise<AdminSettings | null> {
+  const snap = await getDoc(doc(db, 'settings', 'admin'));
+  if (!snap.exists()) return null;
+  return snap.data() as AdminSettings;
+}
+
+// 管理者設定を更新
+export async function updateAdminSettings(data: AdminSettings): Promise<void> {
+  await setDoc(doc(db, 'settings', 'admin'), data);
+}
+
+// 全ユーザー取得（管理者用）
+export async function getAllUsers(): Promise<UserProfile[]> {
+  const snap = await getDocs(collection(db, 'users'));
+  return snap.docs
+    .map(d => ({ uid: d.id, ...d.data() }) as UserProfile)
+    .sort((a, b) => {
+      const aTime = a.createdAt?.toMillis?.() ?? 0;
+      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      return bTime - aTime;
+    });
+}
+
+// 全クイズ取得（管理者用: 非表示含む）
+export async function getAllQuizzesAdmin(): Promise<Quiz[]> {
+  const snap = await getDocs(collection(db, 'quizzes'));
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }) as Quiz)
+    .sort((a, b) => {
+      const aTime = a.createdAt?.toMillis?.() ?? 0;
+      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      return bTime - aTime;
+    });
+}
+
+// 既存クイズを公式に一括変換
+export async function migrateExistingQuizzesToOfficial(): Promise<number> {
+  const snap = await getDocs(collection(db, 'quizzes'));
+  let count = 0;
+  for (const quizDoc of snap.docs) {
+    await updateDoc(doc(db, 'quizzes', quizDoc.id), {
+      creatorUid: 'official',
+      creatorName: 'nami【公式】',
+      isOfficial: true,
+    });
+    count++;
+  }
+  return count;
+}
+
 // クイズ通報
 export async function reportQuiz(quizId: string): Promise<void> {
   await updateDoc(doc(db, 'quizzes', quizId), {
@@ -235,4 +322,46 @@ export async function reportQuiz(quizId: string): Promise<void> {
       await updateDoc(doc(db, 'quizzes', quizId), { isHidden: true });
     }
   }
+}
+
+// ==================
+// 占い関連
+// ==================
+
+// 今日の日付文字列取得
+function getTodayDateString(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+// 今日の占いを取得（キャッシュ）
+export async function getTodayFortune(uid: string): Promise<Fortune | null> {
+  const date = getTodayDateString();
+  const snap = await getDoc(doc(db, 'users', uid, 'fortunes', date));
+  if (!snap.exists()) return null;
+  return snap.data() as Fortune;
+}
+
+// 占いを保存
+export async function saveFortune(uid: string, fortune: Omit<Fortune, 'createdAt'>): Promise<void> {
+  const date = fortune.date;
+  await setDoc(doc(db, 'users', uid, 'fortunes', date), {
+    ...fortune,
+    createdAt: serverTimestamp(),
+  });
+}
+
+// ランダムなクイズ画像を1つ取得（占い用キャラクター表示）
+export async function getRandomQuizImage(): Promise<{ imageUrl: string } | null> {
+  const q = query(
+    collection(db, 'quizzes'),
+    where('isHidden', '==', false),
+    limit(50)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+
+  const randomIndex = Math.floor(Math.random() * snap.docs.length);
+  const quizDoc = snap.docs[randomIndex];
+  return { imageUrl: (quizDoc.data() as Quiz).imageUrl };
 }

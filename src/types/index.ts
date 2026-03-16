@@ -10,6 +10,7 @@ export interface UserProfile {
   displayName: string;
   email: string;
   birthday?: string;          // 誕生日 (YYYY-MM-DD)
+  skipAnswered?: boolean;     // 正解済みクイズをスキップするか
   totalScore: number;         // 累積正解数
   totalAnswered: number;      // 累積回答数
   createdAt: Timestamp;
@@ -141,4 +142,22 @@ export interface CollectionDisplay {
   answer: string;
   isUnlocked: boolean;
   answeredAt?: Timestamp;
+}
+
+// --- 占い結果 ---
+export interface Fortune {
+  uid: string;
+  date: string;              // YYYY-MM-DD
+  fortuneText: string;       // AI生成テキスト
+  characterImageUrl: string; // 今日のキャラ画像URL
+  createdAt: Timestamp;
+}
+
+// --- チャットメッセージ ---
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  imageUrl?: string;         // 生成画像URL
+  createdAt: Date;
 }
