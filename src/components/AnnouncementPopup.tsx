@@ -34,8 +34,11 @@ export default function AnnouncementPopup() {
   const loadAnnouncements = useCallback(async () => {
     try {
       const all = await getActiveAnnouncements();
+      console.log('[AnnouncementPopup] 取得したお知らせ:', all.length, '件');
       const readIds = getReadIds();
+      console.log('[AnnouncementPopup] 既読ID:', readIds);
       const unread = all.filter(a => a.id && !readIds.includes(a.id));
+      console.log('[AnnouncementPopup] 未読:', unread.length, '件');
       if (unread.length > 0) {
         setAnnouncements(unread);
         setCurrentIndex(0);

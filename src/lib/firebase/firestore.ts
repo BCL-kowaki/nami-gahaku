@@ -585,30 +585,35 @@ export async function incrementImageGenCount(uid: string): Promise<void> {
 // ========================================
 
 // 有効なお知らせ一覧取得（ユーザー向け）
+// 複合インデックス不要にするため、全件取得してクライアント側でフィルタ
 export async function getActiveAnnouncements(): Promise<Announcement[]> {
-  const q = query(
-    collection(db, 'announcements'),
-    where('isActive', '==', true),
-    orderBy('createdAt', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({
-    id: d.id,
-    ...sanitizeFirestoreData(d.data()),
-  } as unknown as Announcement));
+  const snap = await getDocs(collection(db, 'announcements'));
+  return snap.docs
+    .map(d => ({
+      id: d.id,
+      ...sanitizeFirestoreData(d.data()),
+    } as unknown as Announcement))
+    .filter(a => a.isActive)
+    .sort((a, b) => {
+      const aTime = safeTimestampMillis(a.createdAt);
+      const bTime = safeTimestampMillis(b.createdAt);
+      return bTime - aTime;
+    });
 }
 
 // 全お知らせ取得（管理者向け）
 export async function getAllAnnouncements(): Promise<Announcement[]> {
-  const q = query(
-    collection(db, 'announcements'),
-    orderBy('createdAt', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({
-    id: d.id,
-    ...sanitizeFirestoreData(d.data()),
-  } as unknown as Announcement));
+  const snap = await getDocs(collection(db, 'announcements'));
+  return snap.docs
+    .map(d => ({
+      id: d.id,
+      ...sanitizeFirestoreData(d.data()),
+    } as unknown as Announcement))
+    .sort((a, b) => {
+      const aTime = safeTimestampMillis(a.createdAt);
+      const bTime = safeTimestampMillis(b.createdAt);
+      return bTime - aTime;
+    });
 }
 
 // お知らせ作成

@@ -104,6 +104,10 @@ export default function AdminPage() {
   const [newAnnouncementMessage, setNewAnnouncementMessage] = useState('');
   const [creatingAnnouncement, setCreatingAnnouncement] = useState(false);
   const [deletingAnnouncementId, setDeletingAnnouncementId] = useState<string | null>(null);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editMessage, setEditMessage] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // メッセージ
   const [successMsg, setSuccessMsg] = useState('');
@@ -287,6 +291,43 @@ export default function AdminPage() {
     } catch (err) {
       console.error('お知らせ更新エラー:', err);
     }
+  };
+
+  // お知らせ編集開始
+  const handleEditAnnouncement = (a: Announcement) => {
+    setEditingAnnouncementId(a.id ?? null);
+    setEditTitle(a.title);
+    setEditMessage(a.message);
+  };
+
+  // お知らせ編集保存
+  const handleSaveEdit = async () => {
+    if (!editingAnnouncementId || !editTitle.trim() || !editMessage.trim()) return;
+    setSavingEdit(true);
+    try {
+      await updateAnnouncement(editingAnnouncementId, {
+        title: editTitle.trim(),
+        message: editMessage.trim(),
+      });
+      setAnnouncements(prev => prev.map(a =>
+        a.id === editingAnnouncementId
+          ? { ...a, title: editTitle.trim(), message: editMessage.trim() }
+          : a
+      ));
+      setEditingAnnouncementId(null);
+      showMessage('お知らせを更新しました');
+    } catch (err) {
+      console.error('お知らせ更新エラー:', err);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // お知らせ編集キャンセル
+  const handleCancelEdit = () => {
+    setEditingAnnouncementId(null);
+    setEditTitle('');
+    setEditMessage('');
   };
 
   // お知らせ削除（2タップ確認）
@@ -812,42 +853,92 @@ export default function AdminPage() {
                 <p className="text-xs text-[var(--color-text-muted)]">{announcements.length}件のお知らせ</p>
                 {announcements.map((a) => (
                   <Card key={a.id}>
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-sm font-bold truncate">{a.title}</p>
-                          {a.isActive ? (
-                            <span className="text-[8px] bg-[var(--color-correct-bg)] text-[var(--color-correct)] px-1.5 py-0.5 rounded font-bold flex-shrink-0">有効</span>
-                          ) : (
-                            <span className="text-[8px] bg-[var(--color-surface)] text-[var(--color-text-muted)] px-1.5 py-0.5 rounded font-bold flex-shrink-0">無効</span>
-                          )}
+                    {editingAnnouncementId === a.id ? (
+                      /* === 編集モード === */
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <label className="block text-xs font-bold mb-1 text-[var(--color-text-secondary)]">タイトル</label>
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            className="input-field"
+                            maxLength={50}
+                          />
                         </div>
-                        <p className="text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap line-clamp-3">{a.message}</p>
-                        <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
-                          作成: {formatTimestamp(a.createdAt)}
-                        </p>
+                        <div>
+                          <label className="block text-xs font-bold mb-1 text-[var(--color-text-secondary)]">本文</label>
+                          <textarea
+                            value={editMessage}
+                            onChange={(e) => setEditMessage(e.target.value)}
+                            className="input-field min-h-[80px] resize-none"
+                            maxLength={500}
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleCancelEdit}
+                            variant="outline"
+                            className="flex-1 text-xs"
+                          >
+                            キャンセル
+                          </Button>
+                          <Button
+                            onClick={handleSaveEdit}
+                            loading={savingEdit}
+                            disabled={!editTitle.trim() || !editMessage.trim()}
+                            className="flex-1 text-xs"
+                          >
+                            <Save className="w-3.5 h-3.5" />保存
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => a.id && handleToggleAnnouncement(a.id, a.isActive)}
-                          className="p-1.5 rounded-[5px] hover:bg-[var(--color-surface)] transition-colors"
-                          title={a.isActive ? '無効にする' : '有効にする'}
-                        >
-                          {a.isActive ? <EyeOff className="w-4 h-4 text-[var(--color-text-muted)]" /> : <Eye className="w-4 h-4 text-[var(--color-text-muted)]" />}
-                        </button>
-                        <button
-                          onClick={() => a.id && handleDeleteAnnouncement(a.id)}
-                          className={`p-1.5 rounded-[5px] transition-colors ${
-                            deletingAnnouncementId === a.id
-                              ? 'bg-[var(--color-incorrect)] text-white'
-                              : 'hover:bg-[var(--color-surface)]'
-                          }`}
-                          title={deletingAnnouncementId === a.id ? 'もう一度タップで削除' : '削除'}
-                        >
-                          <Trash2 className={`w-4 h-4 ${deletingAnnouncementId === a.id ? '' : 'text-[var(--color-text-muted)]'}`} />
-                        </button>
+                    ) : (
+                      /* === 表示モード === */
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-bold truncate">{a.title}</p>
+                            {a.isActive ? (
+                              <span className="text-[8px] bg-[var(--color-correct-bg)] text-[var(--color-correct)] px-1.5 py-0.5 rounded font-bold flex-shrink-0">有効</span>
+                            ) : (
+                              <span className="text-[8px] bg-[var(--color-surface)] text-[var(--color-text-muted)] px-1.5 py-0.5 rounded font-bold flex-shrink-0">無効</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap line-clamp-3">{a.message}</p>
+                          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+                            作成: {formatTimestamp(a.createdAt)}
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => handleEditAnnouncement(a)}
+                            className="p-1.5 rounded-[5px] hover:bg-[var(--color-surface)] transition-colors"
+                            title="編集"
+                          >
+                            <Pencil className="w-4 h-4 text-[var(--color-text-muted)]" />
+                          </button>
+                          <button
+                            onClick={() => a.id && handleToggleAnnouncement(a.id, a.isActive)}
+                            className="p-1.5 rounded-[5px] hover:bg-[var(--color-surface)] transition-colors"
+                            title={a.isActive ? '無効にする' : '有効にする'}
+                          >
+                            {a.isActive ? <EyeOff className="w-4 h-4 text-[var(--color-text-muted)]" /> : <Eye className="w-4 h-4 text-[var(--color-text-muted)]" />}
+                          </button>
+                          <button
+                            onClick={() => a.id && handleDeleteAnnouncement(a.id)}
+                            className={`p-1.5 rounded-[5px] transition-colors ${
+                              deletingAnnouncementId === a.id
+                                ? 'bg-[var(--color-incorrect)] text-white'
+                                : 'hover:bg-[var(--color-surface)]'
+                            }`}
+                            title={deletingAnnouncementId === a.id ? 'もう一度タップで削除' : '削除'}
+                          >
+                            <Trash2 className={`w-4 h-4 ${deletingAnnouncementId === a.id ? '' : 'text-[var(--color-text-muted)]'}`} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </Card>
                 ))}
               </>
