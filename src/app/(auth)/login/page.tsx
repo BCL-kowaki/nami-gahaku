@@ -7,6 +7,8 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { browserLocalPersistence, browserSessionPersistence, setPersistence } from 'firebase/auth';
+import { auth } from '@/lib/firebase/config';
 import { logIn } from '@/lib/firebase/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { getAdminSettings } from '@/lib/firebase/firestore';
@@ -17,6 +19,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const router = useRouter();
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
 
@@ -37,6 +40,8 @@ export default function LoginPage() {
         return;
       }
 
+      // ログイン記憶の永続性を設定
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       await logIn(email, password);
       await refreshProfile();
       router.push('/play');
@@ -101,6 +106,17 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
+
+        {/* ログインを記憶 */}
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-text-primary)]"
+          />
+          <span className="text-xs text-[var(--color-text-secondary)]">ログインを記憶する</span>
+        </label>
 
         {error && (
           <p className="text-xs text-[var(--color-incorrect)] bg-[var(--color-incorrect-bg)] p-2 rounded-[5px]">
