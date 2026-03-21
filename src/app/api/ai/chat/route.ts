@@ -1,4 +1,4 @@
-// POST /api/ai/chat - なみ画伯チャット（テキスト＆画像生成＆学習機能）
+// POST /api/ai/chat - なみ画伯チャット（テキスト＆画像生成＆学習機能＆天気対応）
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse, serverErrorResponse } from '@/lib/utils';
 import { getChatModel, getImageModel } from '@/lib/ai/client';
@@ -7,6 +7,15 @@ import { IMAGE_STYLE_PROMPT } from '@/lib/ai/prompts/image-style';
 
 // 画像リクエスト検知用キーワード
 const IMAGE_KEYWORDS = ['描いて', '書いて', '絵を', 'かいて', '画像', 'イラスト', '絵が見たい', '描け'];
+
+// 天気・位置情報関連キーワード
+const WEATHER_KEYWORDS = [
+  '天気', 'てんき', '気温', 'きおん', '温度', '湿度',
+  '暑い', 'あつい', '寒い', 'さむい', '雨', '晴れ', '曇り', '雪',
+  'ランチ', 'らんち', 'ごはん', 'お昼', 'おひる', 'レストラン',
+  '食べ', 'たべ', '近く', 'ちかく', 'おすすめ', '散歩', 'さんぽ',
+  '出かけ', 'でかけ', 'お出かけ', '外', 'そと',
+];
 
 // 学習すべき情報を検知するキーワード
 const MEMORY_PATTERNS = [
@@ -31,21 +40,64 @@ function isImageRequest(message: string): boolean {
   return IMAGE_KEYWORDS.some((keyword) => message.includes(keyword));
 }
 
+function isWeatherRelated(message: string): boolean {
+  return WEATHER_KEYWORDS.some((keyword) => message.includes(keyword));
+}
+
+// 天気情報を内部で取得
+async function fetchWeather(lat: number, lon: number): Promise<{
+  city: string; weather: string; description: string;
+  temp: number; feelsLike: number; humidity: number;
+} | null> {
+  try {
+    const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+    if (!apiKey) return null;
+
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&lang=ja&units=metric`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    return {
+      city: data.name || '不明',
+      weather: data.weather?.[0]?.main || '',
+      description: data.weather?.[0]?.description || '',
+      temp: Math.round(data.main?.temp ?? 0),
+      feelsLike: Math.round(data.main?.feels_like ?? 0),
+      humidity: data.main?.humidity ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// AI応答から[MEMORY: xxx]形式の学習情報を抽出
+function extractAiMemories(responseText: string): { cleanText: string; memories: string[] } {
+  const memories: string[] = [];
+  const cleanText = responseText.replace(/\[MEMORY:\s*(.+?)\]/g, (_, content) => {
+    memories.push(content.trim());
+    return '';
+  }).trim();
+  return { cleanText, memories };
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { message, history = [], userMemory = '', userProfile = {} } = await request.json();
+    const {
+      message, history = [], userMemory = '', userProfile = {},
+      location,
+    } = await request.json();
 
     if (!message || typeof message !== 'string') {
       return errorResponse('メッセージがないぜ！', 'MISSING_MESSAGE', 400);
     }
 
-    // 学習すべき情報を抽出
+    // 学習すべき情報を抽出（regex）
     const newMemory = extractMemory(message);
 
     // 画像生成リクエスト判定
     if (isImageRequest(message)) {
       const result = await handleImageRequest(message);
-      // 学習情報があれば追加して返す
       const body = await result.json();
       if (newMemory) {
         body.data = { ...body.data, newMemory };
@@ -56,8 +108,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 通常テキストチャット（メモリ付き）
-    return handleTextChat(message, history, userMemory, newMemory, userProfile);
+    // 天気情報を取得（天気関連のキーワードがあり、位置情報がある場合）
+    let weatherInfo: string | null = null;
+    if (isWeatherRelated(message) && location?.lat && location?.lon) {
+      const weather = await fetchWeather(location.lat, location.lon);
+      if (weather) {
+        weatherInfo = `【現在の天気情報】場所: ${weather.city} / 天気: ${weather.description} / 気温: ${weather.temp}°C（体感${weather.feelsLike}°C） / 湿度: ${weather.humidity}%`;
+      }
+    }
+
+    // 通常テキストチャット（メモリ・天気付き）
+    return handleTextChat(message, history, userMemory, newMemory, userProfile, weatherInfo, location);
   } catch (err) {
     console.error('チャットエラー:', err);
     return serverErrorResponse();
@@ -78,12 +139,13 @@ async function handleTextChat(
   history: { role: string; content: string }[],
   userMemory: string,
   newMemory: string | null,
-  userProfile: { nickname?: string; birthday?: string }
+  userProfile: { nickname?: string; birthday?: string },
+  weatherInfo: string | null,
+  location: { lat: number; lon: number } | null,
 ) {
-  // ユーザー学習情報をプロンプトに追加
   let systemPrompt = NAMI_CHARACTER_PROMPT;
 
-  // プロフィール情報を事前知識として追加
+  // プロフィール情報
   const profileParts: string[] = [];
   if (userProfile.nickname) {
     profileParts.push(`ニックネーム: ${userProfile.nickname}`);
@@ -91,15 +153,26 @@ async function handleTextChat(
   if (userProfile.birthday) {
     profileParts.push(`誕生日: ${userProfile.birthday}`);
     if (isBirthdayToday(userProfile.birthday)) {
-      profileParts.push('※今日はこのユーザーの誕生日です！会話の中で自然にお祝いしてあげてください。「おたんじょうびおめでとう！」など、なみ画伯らしく祝ってあげてください。');
+      profileParts.push('※今日はこのユーザーの誕生日です！会話の中で自然にお祝いしてあげてください。');
     }
   }
   if (profileParts.length > 0) {
     systemPrompt += `\n\n【このユーザーのプロフィール】\n${profileParts.join('\n')}\nニックネームがあれば名前で呼びかけてください。`;
   }
 
+  // 学習メモリ
   if (userMemory) {
     systemPrompt += `\n\n【このユーザーについて覚えていること】\n${userMemory}\nこれらの情報を自然に会話に活かしてください。`;
+  }
+
+  // 天気情報
+  if (weatherInfo) {
+    systemPrompt += `\n\n${weatherInfo}\nこの天気情報を参考に、なみ画伯らしく答えてあげてください。`;
+  }
+
+  // 位置情報あり（天気キーワードなしでも場所がわかっていることを伝える）
+  if (location && !weatherInfo) {
+    systemPrompt += `\n\n【ユーザーの位置情報あり】ユーザーはGPS位置情報を共有しています。場所に関する質問があれば天気や地域の情報を考慮して回答できます。`;
   }
 
   // チャット履歴をGemini形式に変換
@@ -120,11 +193,19 @@ async function handleTextChat(
 
   const chat = getChatModel(geminiHistory);
   const result = await chat.sendMessage(message);
-  const responseText = result.response.text();
+  const rawResponse = result.response.text();
+
+  // AI応答から[MEMORY: xxx]を抽出
+  const { cleanText: responseText, memories: aiMemories } = extractAiMemories(rawResponse);
+
+  // regex記憶 + AI抽出記憶を統合
+  const allNewMemories: string[] = [];
+  if (newMemory) allNewMemories.push(newMemory);
+  allNewMemories.push(...aiMemories);
 
   return successResponse({
     message: responseText,
-    newMemory: newMemory || undefined,
+    newMemory: allNewMemories.length > 0 ? allNewMemories.join(' / ') : undefined,
   });
 }
 
@@ -133,7 +214,6 @@ async function handleImageRequest(message: string) {
   try {
     const model = getImageModel();
 
-    // スタイルプロンプト + ユーザーのリクエストを組み合わせ
     const prompt = `${IMAGE_STYLE_PROMPT}
 
 ユーザーのリクエスト: ${message}
@@ -146,7 +226,6 @@ async function handleImageRequest(message: string) {
     let responseText = '';
     let imageBase64 = '';
 
-    // レスポンスからテキストと画像を抽出
     if (response.candidates && response.candidates[0]) {
       const parts = response.candidates[0].content.parts;
       for (const part of parts) {

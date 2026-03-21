@@ -32,6 +32,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -42,6 +43,21 @@ export default function ChatPage() {
   } = useChatStore();
   const user = useAuthStore((s) => s.user);
   const profile = useAuthStore((s) => s.profile);
+
+  // GPS位置情報を取得
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        },
+        () => {
+          // GPS取得失敗 → 位置情報なしで通常チャット続行
+        },
+        { timeout: 10000, maximumAge: 300000 } // 5分キャッシュ
+      );
+    }
+  }, []);
 
   // ルーム一覧読み込み
   const loadRooms = useCallback(async () => {
@@ -232,6 +248,7 @@ export default function ChatPage() {
             nickname: profile?.displayName || '',
             birthday: profile?.birthday || '',
           },
+          location: location || undefined,
         }),
       });
 
