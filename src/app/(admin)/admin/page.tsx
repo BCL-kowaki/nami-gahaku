@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Users, ImageIcon, Settings, LogOut, Pencil,
   Check, Eye, EyeOff, Save, BarChart3, AlertTriangle,
-  Upload, ArrowLeft, ArrowRight, Send, Trash2,
+  Upload, ArrowLeft, ArrowRight, Send, Trash2, Bell, Plus,
 } from 'lucide-react';
 import Image from 'next/image';
 import Button from '@/components/ui/Button';
@@ -23,14 +23,18 @@ import {
   deleteUser,
   createQuiz,
   migrateExistingQuizzesToOfficial,
+  getAllAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
   type AdminSettings,
 } from '@/lib/firebase/firestore';
 import { storage } from '@/lib/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import type { UserProfile, Quiz, QuizCategory } from '@/types';
+import type { UserProfile, Quiz, QuizCategory, Announcement } from '@/types';
 import { getEtoDisplayText } from '@/lib/zodiac';
 
-type Tab = 'users' | 'quizzes' | 'create' | 'settings';
+type Tab = 'users' | 'quizzes' | 'create' | 'announcements' | 'settings';
 
 // Firestore Timestamp を安全に日付文字列に変換
 function formatTimestamp(ts: unknown): string {
@@ -93,6 +97,14 @@ export default function AdminPage() {
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState(false);
 
+  // お知らせ
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
+  const [newAnnouncementTitle, setNewAnnouncementTitle] = useState('');
+  const [newAnnouncementMessage, setNewAnnouncementMessage] = useState('');
+  const [creatingAnnouncement, setCreatingAnnouncement] = useState(false);
+  const [deletingAnnouncementId, setDeletingAnnouncementId] = useState<string | null>(null);
+
   // メッセージ
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -141,11 +153,24 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchAnnouncements = useCallback(async () => {
+    setLoadingAnnouncements(true);
+    try {
+      const data = await getAllAnnouncements();
+      setAnnouncements(data);
+    } catch (err) {
+      console.error('お知らせ取得エラー:', err);
+    } finally {
+      setLoadingAnnouncements(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
     fetchQuizzes();
     fetchSettings();
-  }, [fetchUsers, fetchQuizzes, fetchSettings]);
+    fetchAnnouncements();
+  }, [fetchUsers, fetchQuizzes, fetchSettings, fetchAnnouncements]);
 
   // 設定保存
   const handleSaveSettings = async () => {
@@ -231,6 +256,54 @@ export default function AdminPage() {
       console.error('マイグレーションエラー:', err);
     } finally {
       setMigrating(false);
+    }
+  };
+
+  // お知らせ作成
+  const handleCreateAnnouncement = async () => {
+    if (!newAnnouncementTitle.trim() || !newAnnouncementMessage.trim()) return;
+    setCreatingAnnouncement(true);
+    try {
+      await createAnnouncement(newAnnouncementTitle.trim(), newAnnouncementMessage.trim());
+      setNewAnnouncementTitle('');
+      setNewAnnouncementMessage('');
+      showMessage('お知らせを作成しました');
+      fetchAnnouncements();
+    } catch (err) {
+      console.error('お知らせ作成エラー:', err);
+    } finally {
+      setCreatingAnnouncement(false);
+    }
+  };
+
+  // お知らせ有効/無効切り替え
+  const handleToggleAnnouncement = async (id: string, currentActive: boolean) => {
+    try {
+      await updateAnnouncement(id, { isActive: !currentActive });
+      setAnnouncements(prev => prev.map(a =>
+        a.id === id ? { ...a, isActive: !currentActive } : a
+      ));
+      showMessage(currentActive ? 'お知らせを無効にしました' : 'お知らせを有効にしました');
+    } catch (err) {
+      console.error('お知らせ更新エラー:', err);
+    }
+  };
+
+  // お知らせ削除（2タップ確認）
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (deletingAnnouncementId === id) {
+      try {
+        await deleteAnnouncement(id);
+        setAnnouncements(prev => prev.filter(a => a.id !== id));
+        showMessage('お知らせを削除しました');
+      } catch (err) {
+        console.error('お知らせ削除エラー:', err);
+      } finally {
+        setDeletingAnnouncementId(null);
+      }
+    } else {
+      setDeletingAnnouncementId(id);
+      setTimeout(() => setDeletingAnnouncementId(prev => prev === id ? null : prev), 3000);
     }
   };
 
@@ -338,6 +411,7 @@ export default function AdminPage() {
     { key: 'users', label: 'ユーザー', icon: Users },
     { key: 'quizzes', label: 'クイズ', icon: ImageIcon },
     { key: 'create', label: 'つくる', icon: Pencil },
+    { key: 'announcements', label: 'お知らせ', icon: Bell },
     { key: 'settings', label: '設定', icon: Settings },
   ];
 
@@ -402,13 +476,13 @@ export default function AdminPage() {
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition-colors relative ${
+            className={`flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-bold transition-colors relative ${
               activeTab === key
                 ? 'text-[var(--color-text-primary)]'
                 : 'text-[var(--color-text-muted)]'
             }`}
           >
-            <Icon className="w-4 h-4" />
+            <Icon className="w-3.5 h-3.5" />
             {label}
             {activeTab === key && (
               <motion.div
@@ -682,6 +756,100 @@ export default function AdminPage() {
                     </div>
                   </div>
                 )}
+              </>
+            )}
+          </motion.div>
+        )}
+
+        {/* ================= お知らせ ================= */}
+        {activeTab === 'announcements' && (
+          <motion.div key="announcements" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-4">
+            {/* 新規作成フォーム */}
+            <Card>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <Plus className="w-4 h-4" />新しいお知らせ
+              </h3>
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-[var(--color-text-secondary)]">タイトル</label>
+                  <input
+                    type="text"
+                    value={newAnnouncementTitle}
+                    onChange={(e) => setNewAnnouncementTitle(e.target.value)}
+                    className="input-field"
+                    placeholder="例: アップデートのお知らせ"
+                    maxLength={50}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-[var(--color-text-secondary)]">本文</label>
+                  <textarea
+                    value={newAnnouncementMessage}
+                    onChange={(e) => setNewAnnouncementMessage(e.target.value)}
+                    className="input-field min-h-[80px] resize-none"
+                    placeholder="お知らせの内容を入力..."
+                    maxLength={500}
+                  />
+                </div>
+                <Button
+                  onClick={handleCreateAnnouncement}
+                  fullWidth
+                  loading={creatingAnnouncement}
+                  disabled={!newAnnouncementTitle.trim() || !newAnnouncementMessage.trim()}
+                >
+                  <Send className="w-4 h-4" />お知らせを作成
+                </Button>
+              </div>
+            </Card>
+
+            {/* お知らせ一覧 */}
+            {loadingAnnouncements ? (
+              <Loading text="お知らせを読み込み中..." />
+            ) : announcements.length === 0 ? (
+              <p className="text-sm text-[var(--color-text-muted)] text-center py-8">お知らせはありません</p>
+            ) : (
+              <>
+                <p className="text-xs text-[var(--color-text-muted)]">{announcements.length}件のお知らせ</p>
+                {announcements.map((a) => (
+                  <Card key={a.id}>
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm font-bold truncate">{a.title}</p>
+                          {a.isActive ? (
+                            <span className="text-[8px] bg-[var(--color-correct-bg)] text-[var(--color-correct)] px-1.5 py-0.5 rounded font-bold flex-shrink-0">有効</span>
+                          ) : (
+                            <span className="text-[8px] bg-[var(--color-surface)] text-[var(--color-text-muted)] px-1.5 py-0.5 rounded font-bold flex-shrink-0">無効</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap line-clamp-3">{a.message}</p>
+                        <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+                          作成: {formatTimestamp(a.createdAt)}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => a.id && handleToggleAnnouncement(a.id, a.isActive)}
+                          className="p-1.5 rounded-[5px] hover:bg-[var(--color-surface)] transition-colors"
+                          title={a.isActive ? '無効にする' : '有効にする'}
+                        >
+                          {a.isActive ? <EyeOff className="w-4 h-4 text-[var(--color-text-muted)]" /> : <Eye className="w-4 h-4 text-[var(--color-text-muted)]" />}
+                        </button>
+                        <button
+                          onClick={() => a.id && handleDeleteAnnouncement(a.id)}
+                          className={`p-1.5 rounded-[5px] transition-colors ${
+                            deletingAnnouncementId === a.id
+                              ? 'bg-[var(--color-incorrect)] text-white'
+                              : 'hover:bg-[var(--color-surface)]'
+                          }`}
+                          title={deletingAnnouncementId === a.id ? 'もう一度タップで削除' : '削除'}
+                        >
+                          <Trash2 className={`w-4 h-4 ${deletingAnnouncementId === a.id ? '' : 'text-[var(--color-text-muted)]'}`} />
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
               </>
             )}
           </motion.div>

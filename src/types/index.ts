@@ -188,3 +188,12 @@ export interface UserMemory {
   memories: string[];        // 学習した情報のリスト
   updatedAt: Timestamp;
 }
+
+// --- お知らせ ---
+export interface Announcement {
+  id?: string;
+  title: string;
+  message: string;
+  isActive: boolean;
+  createdAt: Timestamp;
+}

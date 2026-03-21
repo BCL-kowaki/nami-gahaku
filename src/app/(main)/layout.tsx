@@ -1,5 +1,6 @@
 import AuthGuard from '@/components/layout/AuthGuard';
 import BottomNav from '@/components/layout/BottomNav';
+import AnnouncementPopup from '@/components/AnnouncementPopup';
 
 // 認証後メインレイアウト（ボトムナビ付き）
 export default function MainLayout({
@@ -15,6 +16,7 @@ export default function MainLayout({
         </div>
       </main>
       <BottomNav />
+      <AnnouncementPopup />
     </AuthGuard>
   );
 }

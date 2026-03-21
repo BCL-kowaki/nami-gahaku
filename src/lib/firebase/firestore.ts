@@ -27,6 +27,7 @@ import type {
   ChatRoom,
   ChatMessageDoc,
   UserMemory,
+  Announcement,
 } from '@/types';
 
 // Firestore Timestamp を安全にミリ秒に変換するヘルパー
@@ -577,4 +578,57 @@ export async function incrementImageGenCount(uid: string): Promise<void> {
     date: today,
     count,
   });
+}
+
+// ========================================
+// お知らせ (announcements)
+// ========================================
+
+// 有効なお知らせ一覧取得（ユーザー向け）
+export async function getActiveAnnouncements(): Promise<Announcement[]> {
+  const q = query(
+    collection(db, 'announcements'),
+    where('isActive', '==', true),
+    orderBy('createdAt', 'desc'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...sanitizeFirestoreData(d.data()),
+  } as unknown as Announcement));
+}
+
+// 全お知らせ取得（管理者向け）
+export async function getAllAnnouncements(): Promise<Announcement[]> {
+  const q = query(
+    collection(db, 'announcements'),
+    orderBy('createdAt', 'desc'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...sanitizeFirestoreData(d.data()),
+  } as unknown as Announcement));
+}
+
+// お知らせ作成
+export async function createAnnouncement(title: string, message: string): Promise<string> {
+  const announcementRef = doc(collection(db, 'announcements'));
+  await setDoc(announcementRef, {
+    title,
+    message,
+    isActive: true,
+    createdAt: serverTimestamp(),
+  });
+  return announcementRef.id;
+}
+
+// お知らせ更新
+export async function updateAnnouncement(id: string, data: Partial<Announcement>): Promise<void> {
+  await updateDoc(doc(db, 'announcements', id), data);
+}
+
+// お知らせ削除
+export async function deleteAnnouncement(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'announcements', id));
 }
