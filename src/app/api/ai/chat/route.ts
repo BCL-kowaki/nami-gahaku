@@ -44,7 +44,7 @@ function isWeatherRelated(message: string): boolean {
   return WEATHER_KEYWORDS.some((keyword) => message.includes(keyword));
 }
 
-// 天気情報を内部で取得
+// 天気情報を内部で取得（5秒タイムアウト付き）
 async function fetchWeather(lat: number, lon: number): Promise<{
   city: string; weather: string; description: string;
   temp: number; feelsLike: number; humidity: number;
@@ -54,8 +54,16 @@ async function fetchWeather(lat: number, lon: number): Promise<{
     if (!apiKey) return null;
 
     const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&lang=ja&units=metric`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      console.error('天気API HTTPエラー:', res.status);
+      return null;
+    }
 
     const data = await res.json();
     return {
@@ -66,7 +74,8 @@ async function fetchWeather(lat: number, lon: number): Promise<{
       feelsLike: Math.round(data.main?.feels_like ?? 0),
       humidity: data.main?.humidity ?? 0,
     };
-  } catch {
+  } catch (err) {
+    console.error('天気取得エラー:', err);
     return null;
   }
 }
@@ -192,11 +201,21 @@ async function handleTextChat(
   ];
 
   const chat = getChatModel(geminiHistory);
-  const result = await chat.sendMessage(message);
-  const rawResponse = result.response.text();
+
+  let rawResponse = '';
+  try {
+    const result = await chat.sendMessage(message);
+    rawResponse = result.response.text();
+  } catch (aiErr) {
+    console.error('Gemini API エラー:', aiErr);
+    rawResponse = '';
+  }
 
   // AI応答から[MEMORY: xxx]を抽出
   const { cleanText: responseText, memories: aiMemories } = extractAiMemories(rawResponse);
+
+  // 空応答へのフォールバック
+  const finalMessage = responseText || 'おっと、ちょっと考えすぎちまったぜ...もう一回聞いてくれよな！';
 
   // regex記憶 + AI抽出記憶を統合
   const allNewMemories: string[] = [];
@@ -204,7 +223,7 @@ async function handleTextChat(
   allNewMemories.push(...aiMemories);
 
   return successResponse({
-    message: responseText,
+    message: finalMessage,
     newMemory: allNewMemories.length > 0 ? allNewMemories.join(' / ') : undefined,
   });
 }

@@ -277,10 +277,12 @@ export default function ChatPage() {
           }
         }
 
+        const replyText = data.data.message || 'おっと、うまく返事できなかったぜ...もう一回聞いてくれよな！';
+
         const assistantMessage: ChatMessage = {
           id: `assistant_${Date.now()}`,
           role: 'assistant',
-          content: data.data.message,
+          content: replyText,
           imageUrl,
           createdAt: new Date(),
         };
@@ -291,7 +293,7 @@ export default function ChatPage() {
         const assistantMsgData: { roomId: string; role: 'assistant'; content: string; imageUrl?: string } = {
           roomId: currentRoomId,
           role: 'assistant',
-          content: data.data.message,
+          content: replyText,
         };
         if (imageUrl) {
           assistantMsgData.imageUrl = imageUrl;
@@ -299,9 +301,9 @@ export default function ChatPage() {
         await saveChatMessage(user.uid, currentRoomId, assistantMsgData);
 
         // ルームの最終メッセージ更新
-        const lastMsg = data.data.message.length > 30
-          ? data.data.message.slice(0, 30) + '...'
-          : data.data.message;
+        const lastMsg = replyText.length > 30
+          ? replyText.slice(0, 30) + '...'
+          : replyText;
         await updateChatRoom(user.uid, currentRoomId, { lastMessage: lastMsg });
       } else {
         const errorMessage: ChatMessage = {
