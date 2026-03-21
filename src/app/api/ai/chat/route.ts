@@ -80,13 +80,21 @@ async function fetchWeather(lat: number, lon: number): Promise<{
   }
 }
 
-// AI応答から[MEMORY: xxx]形式の学習情報を抽出
+// AI応答から[MEMORY: xxx]形式の学習情報を抽出し、Markdown記法を除去
 function extractAiMemories(responseText: string): { cleanText: string; memories: string[] } {
   const memories: string[] = [];
-  const cleanText = responseText.replace(/\[MEMORY:\s*(.+?)\]/g, (_, content) => {
+  let cleanText = responseText.replace(/\[MEMORY:\s*(.+?)\]/g, (_, content) => {
     memories.push(content.trim());
     return '';
-  }).trim();
+  });
+  // Markdown記法を除去（**太字**, *イタリック*, ### 見出し, etc.）
+  cleanText = cleanText
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[-*]\s+/gm, '・')
+    .replace(/`(.+?)`/g, '$1')
+    .trim();
   return { cleanText, memories };
 }
 
