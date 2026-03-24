@@ -50,13 +50,18 @@ export async function POST(request: NextRequest) {
     const bucket = adminStorage.bucket();
     const file = bucket.file(filePath);
 
+    // ダウンロードトークンを生成してメタデータに設定
+    const downloadToken = crypto.randomUUID();
     await file.save(imageBuffer, {
-      metadata: { contentType: 'image/png' },
+      metadata: {
+        contentType: 'image/png',
+        metadata: { firebaseStorageDownloadTokens: downloadToken },
+      },
     });
 
-    // 公開URLを取得
-    await file.makePublic();
-    const imageUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    // Firebase Storage 形式のダウンロードURL（Next.js Image対応）
+    const encodedPath = encodeURIComponent(filePath);
+    const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${downloadToken}`;
 
     // Firestoreにクイズを作成
     const quizId = await createQuiz({
