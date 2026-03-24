@@ -21,7 +21,6 @@ import {
   updateQuiz,
   deleteQuiz,
   deleteUser,
-  createQuiz,
   migrateExistingQuizzesToOfficial,
   getAllAnnouncements,
   createAnnouncement,
@@ -29,8 +28,6 @@ import {
   deleteAnnouncement,
   type AdminSettings,
 } from '@/lib/firebase/firestore';
-import { storage } from '@/lib/firebase/config';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import type { UserProfile, Quiz, QuizCategory, Announcement } from '@/types';
 import { getEtoDisplayText } from '@/lib/zodiac';
 
@@ -400,31 +397,29 @@ export default function AdminPage() {
     setCreateLoading(true);
     setCreateError('');
     try {
-      // 公式用ディレクトリにアップロード
-      const base64Data = processedImage.replace(/^data:image\/\w+;base64,/, '');
-      const byteString = atob(base64Data);
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-      const blob = new Blob([ab], { type: 'image/png' });
+      // 管理者パスワードを取得
+      const settings = await getAdminSettings();
+      const currentAdminPassword = settings?.adminPassword ?? 'admin';
 
-      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
-      const storageRef = ref(storage, `official-images/${fileName}`);
-      await uploadBytes(storageRef, blob, { contentType: 'image/png' });
-      const imageUrl = await getDownloadURL(storageRef);
-
-      // 公式クイズとして作成
-      await createQuiz({
-        imageUrl,
-        originalImageUrl: imagePreview,
-        answer: createAnswer,
-        category: createCategory,
-        dummyChoices: createDummies as [string, string, string],
-        creatorUid: 'official',
-        creatorName: 'nami【公式】',
-        isOfficial: true,
-        themeId: null,
+      // サーバーサイドAPI経由で画像アップロード＋クイズ作成
+      const res = await fetch('/api/admin/quiz/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminPassword: currentAdminPassword,
+          imageBase64: processedImage,
+          originalImageBase64: imagePreview,
+          answer: createAnswer,
+          category: createCategory,
+          dummyChoices: createDummies,
+        }),
       });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateError(data.error || 'クイズの作成に失敗しました');
+        return;
+      }
 
       setCreateSuccess(true);
       fetchQuizzes();
