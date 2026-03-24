@@ -447,7 +447,7 @@ export default function ChatPage() {
               >
                 <button
                   onClick={() => handleSelectRoom(room)}
-                  className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface)] transition-colors text-left"
+                  className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface)] transition-colors text-left overflow-hidden"
                 >
                   <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
                     <Image src="/logo.png" alt="なみ画伯" width={40} height={40} />

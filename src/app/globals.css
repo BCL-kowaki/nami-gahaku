@@ -95,6 +95,8 @@ body {
 /* --- インプット --- */
 .input-field {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0.75rem 1rem;
   border: 1.5px solid var(--color-border);
   border-radius: 5px;
