@@ -12,7 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 export default function SignupPage() {
   const [displayName, setDisplayName] = useState('');
   const [birthday, setBirthday] = useState('');
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -35,14 +35,20 @@ export default function SignupPage() {
       return;
     }
 
+    // IDバリデーション: 英数字6文字以上（メールアドレスもOK）
+    if (!loginId.includes('@') && !/^[a-zA-Z0-9]{6,}$/.test(loginId)) {
+      setError('IDは英数字6文字以上で入力してください');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await signUp(email, password, displayName, birthday || undefined);
+      await signUp(loginId, password, displayName, birthday || undefined);
       await refreshProfile();
       router.push('/play');
     } catch {
-      setError('アカウントの作成に失敗しました。別のメールアドレスをお試しください。');
+      setError('アカウントの作成に失敗しました。別のIDをお試しください。');
     } finally {
       setLoading(false);
     }
@@ -96,16 +102,21 @@ export default function SignupPage() {
 
         <div>
           <label className="block text-xs font-bold mb-1 text-[var(--color-text-secondary)]">
-            メールアドレス
+            ID
           </label>
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            value={loginId}
+            onChange={(e) => setLoginId(e.target.value)}
             className="input-field"
-            placeholder="email@example.com"
+            placeholder="英数字6文字以上"
             required
+            autoCapitalize="none"
+            autoCorrect="off"
           />
+          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+            ログインに使います（メールアドレスでもOK）
+          </p>
         </div>
 
         <div>

@@ -14,7 +14,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { getAdminSettings } from '@/lib/firebase/firestore';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,7 +34,7 @@ export default function LoginPage() {
       const adminId = adminSettings?.adminId ?? 'admin';
       const adminPass = adminSettings?.adminPassword ?? 'admin';
 
-      if (email === adminId && password === adminPass) {
+      if (loginId === adminId && password === adminPass) {
         sessionStorage.setItem('nami-admin', 'true');
         router.push('/admin');
         return;
@@ -42,11 +42,11 @@ export default function LoginPage() {
 
       // ログイン記憶の永続性を設定
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
-      await logIn(email, password);
+      await logIn(loginId, password);
       await refreshProfile();
       router.push('/play');
     } catch {
-      setError('メールアドレスまたはパスワードが正しくありません');
+      setError('IDまたはパスワードが正しくありません');
     } finally {
       setLoading(false);
     }
@@ -72,15 +72,17 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full">
         <div>
           <label className="block text-xs font-bold mb-1 text-[var(--color-text-secondary)]">
-            メールアドレス
+            ID
           </label>
           <input
             type="text"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={loginId}
+            onChange={(e) => setLoginId(e.target.value)}
             className="input-field"
-            placeholder="email@example.com"
+            placeholder="IDまたはメールアドレス"
             required
+            autoCapitalize="none"
+            autoCorrect="off"
           />
         </div>
 

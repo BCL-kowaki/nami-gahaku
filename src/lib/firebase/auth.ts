@@ -11,15 +11,24 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './config';
 import type { UserProfile } from '@/types';
 
+// IDをFirebase Auth用のメールアドレスに変換
+// メールアドレス形式ならそのまま、英数字IDなら @nami-quiz.app を付加
+export function toAuthEmail(loginId: string): string {
+  if (loginId.includes('@')) return loginId;
+  return `${loginId}@nami-quiz.app`;
+}
+
 // サインアップ: Authユーザー作成 + Firestoreにユーザードキュメント作成
-export async function signUp(email: string, password: string, displayName: string, birthday?: string): Promise<User> {
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
+export async function signUp(loginId: string, password: string, displayName: string, birthday?: string): Promise<User> {
+  const authEmail = toAuthEmail(loginId);
+  const credential = await createUserWithEmailAndPassword(auth, authEmail, password);
   const user = credential.user;
 
   // Firestoreにユーザードキュメントを作成
   const userDoc: Record<string, unknown> = {
     displayName,
-    email,
+    loginId,
+    email: authEmail,
     totalScore: 0,
     totalAnswered: 0,
     createdAt: serverTimestamp(),
@@ -35,8 +44,9 @@ export async function signUp(email: string, password: string, displayName: strin
 }
 
 // ログイン
-export async function logIn(email: string, password: string): Promise<User> {
-  const credential = await signInWithEmailAndPassword(auth, email, password);
+export async function logIn(loginId: string, password: string): Promise<User> {
+  const authEmail = toAuthEmail(loginId);
+  const credential = await signInWithEmailAndPassword(auth, authEmail, password);
   return credential.user;
 }
 

@@ -26,6 +26,7 @@ import {
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
+  updateUserProfile,
   type AdminSettings,
 } from '@/lib/firebase/firestore';
 import type { UserProfile, Quiz, QuizCategory, Announcement } from '@/types';
@@ -105,6 +106,14 @@ export default function AdminPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editMessage, setEditMessage] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // ユーザー編集
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserBirthday, setEditUserBirthday] = useState('');
+  const [editUserScore, setEditUserScore] = useState(0);
+  const [editUserAnswered, setEditUserAnswered] = useState(0);
+  const [savingUser, setSavingUser] = useState(false);
 
   // メッセージ
   const [successMsg, setSuccessMsg] = useState('');
@@ -208,6 +217,48 @@ export default function AdminPage() {
       setDeletingUserId(uid);
       setTimeout(() => setDeletingUserId(prev => prev === uid ? null : prev), 3000);
     }
+  };
+
+  // ユーザー編集開始
+  const handleEditUser = (u: UserProfile) => {
+    setEditingUserId(u.uid);
+    setEditUserName(u.displayName);
+    setEditUserBirthday(u.birthday || '');
+    setEditUserScore(u.totalScore);
+    setEditUserAnswered(u.totalAnswered);
+  };
+
+  // ユーザー編集保存
+  const handleSaveUser = async () => {
+    if (!editingUserId || !editUserName.trim()) return;
+    setSavingUser(true);
+    try {
+      const updates: Record<string, unknown> = {
+        displayName: editUserName.trim(),
+        totalScore: editUserScore,
+        totalAnswered: editUserAnswered,
+      };
+      if (editUserBirthday) {
+        updates.birthday = editUserBirthday;
+      }
+      await updateUserProfile(editingUserId, updates as Partial<UserProfile>);
+      setUsers(prev => prev.map(u =>
+        u.uid === editingUserId
+          ? { ...u, displayName: editUserName.trim(), birthday: editUserBirthday || u.birthday, totalScore: editUserScore, totalAnswered: editUserAnswered }
+          : u
+      ));
+      setEditingUserId(null);
+      showMessage('ユーザー情報を更新しました');
+    } catch (err) {
+      console.error('ユーザー更新エラー:', err);
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  // ユーザー編集キャンセル
+  const handleCancelEditUser = () => {
+    setEditingUserId(null);
   };
 
   // クイズ削除確認
@@ -547,35 +598,100 @@ export default function AdminPage() {
                   const userAccuracy = u.totalAnswered > 0 ? Math.round((u.totalScore / u.totalAnswered) * 100) : 0;
                   return (
                     <Card key={u.uid}>
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[var(--color-surface)] flex items-center justify-center border border-[var(--color-border)] flex-shrink-0">
-                          <Users className="w-5 h-5 text-[var(--color-text-muted)]" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold truncate">{u.displayName}</p>
-                          <p className="text-[10px] text-[var(--color-text-muted)] truncate">{u.email}</p>
-                          {u.birthday && <p className="text-[10px] text-[var(--color-text-muted)]">🎂 {u.birthday}　{getEtoDisplayText(u.birthday)}</p>}
-                          <div className="flex gap-3 mt-1.5">
-                            <span className="text-[10px] text-[var(--color-text-muted)]">正解 <span className="font-bold text-[var(--color-text-primary)]">{u.totalScore}</span></span>
-                            <span className="text-[10px] text-[var(--color-text-muted)]">回答 <span className="font-bold text-[var(--color-text-primary)]">{u.totalAnswered}</span></span>
-                            <span className="text-[10px] text-[var(--color-text-muted)]">正解率 <span className="font-bold text-[var(--color-text-primary)]">{userAccuracy}%</span></span>
+                      {editingUserId === u.uid ? (
+                        /* === ユーザー編集モード === */
+                        <div className="flex flex-col gap-3">
+                          <div>
+                            <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">表示名</label>
+                            <input
+                              type="text"
+                              value={editUserName}
+                              onChange={(e) => setEditUserName(e.target.value)}
+                              className="input-field"
+                              maxLength={20}
+                            />
                           </div>
-                          <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
-                            登録: {formatTimestamp(u.createdAt)}
-                          </p>
+                          <div>
+                            <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">誕生日</label>
+                            <input
+                              type="date"
+                              value={editUserBirthday}
+                              onChange={(e) => setEditUserBirthday(e.target.value)}
+                              className="input-field"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">正解数</label>
+                              <input
+                                type="number"
+                                value={editUserScore}
+                                onChange={(e) => setEditUserScore(Math.max(0, parseInt(e.target.value) || 0))}
+                                className="input-field"
+                                min={0}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">回答数</label>
+                              <input
+                                type="number"
+                                value={editUserAnswered}
+                                onChange={(e) => setEditUserAnswered(Math.max(0, parseInt(e.target.value) || 0))}
+                                className="input-field"
+                                min={0}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button onClick={handleCancelEditUser} variant="outline" className="flex-1 text-xs">
+                              キャンセル
+                            </Button>
+                            <Button onClick={handleSaveUser} loading={savingUser} disabled={!editUserName.trim()} className="flex-1 text-xs">
+                              <Save className="w-3.5 h-3.5" />保存
+                            </Button>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteUser(u.uid)}
-                          className={`p-1.5 rounded-[5px] transition-colors flex-shrink-0 ${
-                            deletingUserId === u.uid
-                              ? 'bg-[var(--color-incorrect)] text-white'
-                              : 'hover:bg-[var(--color-surface)]'
-                          }`}
-                          title={deletingUserId === u.uid ? 'もう一度タップで削除' : '削除'}
-                        >
-                          <Trash2 className={`w-4 h-4 ${deletingUserId === u.uid ? '' : 'text-[var(--color-text-muted)]'}`} />
-                        </button>
-                      </div>
+                      ) : (
+                        /* === ユーザー表示モード === */
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-full bg-[var(--color-surface)] flex items-center justify-center border border-[var(--color-border)] flex-shrink-0">
+                            <Users className="w-5 h-5 text-[var(--color-text-muted)]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate">{u.displayName}</p>
+                            <p className="text-[10px] text-[var(--color-text-muted)] truncate">{u.email}</p>
+                            {u.birthday && <p className="text-[10px] text-[var(--color-text-muted)]">🎂 {u.birthday}　{getEtoDisplayText(u.birthday)}</p>}
+                            <div className="flex gap-3 mt-1.5">
+                              <span className="text-[10px] text-[var(--color-text-muted)]">正解 <span className="font-bold text-[var(--color-text-primary)]">{u.totalScore}</span></span>
+                              <span className="text-[10px] text-[var(--color-text-muted)]">回答 <span className="font-bold text-[var(--color-text-primary)]">{u.totalAnswered}</span></span>
+                              <span className="text-[10px] text-[var(--color-text-muted)]">正解率 <span className="font-bold text-[var(--color-text-primary)]">{userAccuracy}%</span></span>
+                            </div>
+                            <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
+                              登録: {formatTimestamp(u.createdAt)}
+                            </p>
+                          </div>
+                          <div className="flex flex-col gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => handleEditUser(u)}
+                              className="p-1.5 rounded-[5px] hover:bg-[var(--color-surface)] transition-colors"
+                              title="編集"
+                            >
+                              <Pencil className="w-4 h-4 text-[var(--color-text-muted)]" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(u.uid)}
+                              className={`p-1.5 rounded-[5px] transition-colors ${
+                                deletingUserId === u.uid
+                                  ? 'bg-[var(--color-incorrect)] text-white'
+                                  : 'hover:bg-[var(--color-surface)]'
+                              }`}
+                              title={deletingUserId === u.uid ? 'もう一度タップで削除' : '削除'}
+                            >
+                              <Trash2 className={`w-4 h-4 ${deletingUserId === u.uid ? '' : 'text-[var(--color-text-muted)]'}`} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </Card>
                   );
                 })}
