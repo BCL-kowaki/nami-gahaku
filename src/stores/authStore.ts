@@ -39,6 +39,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       set({ user, loading: true });
       if (user) {
+        // トークンを強制リフレッシュしてセッション切れを防止
+        try {
+          await user.getIdToken(true);
+        } catch (err) {
+          console.warn('トークンリフレッシュ失敗:', err);
+        }
         const profile = await getUserProfile(user.uid);
         set({ profile, loading: false, initialized: true });
       } else {

@@ -346,7 +346,7 @@ export default function PlayPage() {
               {currentQuiz.choices.map((choice, i) => {
                 let choiceClass = 'card p-3 text-center cursor-pointer transition-all text-sm font-bold';
                 if (isAnswered) {
-                  if (choice === currentQuiz.answer) {
+                  if (choice === selectedAnswer && isCorrect) {
                     choiceClass += ' !border-[var(--color-correct)] !bg-[var(--color-correct-bg)]';
                   } else if (choice === selectedAnswer && !isCorrect) {
                     choiceClass += ' !border-[var(--color-incorrect)] !bg-[var(--color-incorrect-bg)]';
@@ -385,14 +385,9 @@ export default function PlayPage() {
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-2 text-[var(--color-incorrect)]">
-                        <XCircle className="w-6 h-6" />
-                        <span className="text-lg font-black">ざんねん...</span>
-                      </div>
-                      <p className="text-sm text-[var(--color-text-secondary)]">
-                        こたえ: <span className="font-bold">{currentQuiz.answer}</span>
-                      </p>
+                    <div className="flex items-center gap-2 text-[var(--color-incorrect)]">
+                      <XCircle className="w-6 h-6" />
+                      <span className="text-lg font-black">ざんねん...</span>
                     </div>
                   )}
                   <Button onClick={handleNext} variant="outline" fullWidth>
