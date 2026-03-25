@@ -40,17 +40,17 @@ export async function POST(request: NextRequest) {
       return errorResponse('ダミー選択肢を全て入力してください', 'INVALID_REQUEST');
     }
 
-    // Base64をBufferに変換
+    const bucket = adminStorage.bucket();
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).slice(2);
+
+    // 白黒変換済み画像をアップロード
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
-
-    // Firebase Storage にアップロード (Admin SDKはセキュリティルールをバイパス)
-    const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
+    const fileName = `${timestamp}_${randomStr}.png`;
     const filePath = `official-images/${fileName}`;
-    const bucket = adminStorage.bucket();
     const file = bucket.file(filePath);
 
-    // ダウンロードトークンを生成してメタデータに設定
     const downloadToken = crypto.randomUUID();
     await file.save(imageBuffer, {
       metadata: {
@@ -59,14 +59,34 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Firebase Storage 形式のダウンロードURL（Next.js Image対応）
     const encodedPath = encodeURIComponent(filePath);
     const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+
+    // 元画像もStorageにアップロード（Firestoreの1MBドキュメント制限対策）
+    let originalImageUrl: string | undefined;
+    if (originalImageBase64) {
+      const origBase64 = originalImageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const origBuffer = Buffer.from(origBase64, 'base64');
+      const origFileName = `${timestamp}_${randomStr}_original.png`;
+      const origFilePath = `official-images/${origFileName}`;
+      const origFile = bucket.file(origFilePath);
+
+      const origToken = crypto.randomUUID();
+      await origFile.save(origBuffer, {
+        metadata: {
+          contentType: 'image/png',
+          metadata: { firebaseStorageDownloadTokens: origToken },
+        },
+      });
+
+      const origEncodedPath = encodeURIComponent(origFilePath);
+      originalImageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${origEncodedPath}?alt=media&token=${origToken}`;
+    }
 
     // Firestoreにクイズを作成
     const quizId = await createQuiz({
       imageUrl,
-      originalImageUrl: originalImageBase64,
+      originalImageUrl,
       answer: answer.trim(),
       category,
       dummyChoices: dummyChoices.map((d: string) => d.trim()) as [string, string, string],
@@ -84,3 +104,12 @@ export async function POST(request: NextRequest) {
 }
 
 export const maxDuration = 30;
+
+// リクエストボディサイズ上限を10MBに拡大（画像2枚分のBase64対応）
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
