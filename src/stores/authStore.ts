@@ -39,14 +39,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       set({ user, loading: true });
       if (user) {
-        // トークンを強制リフレッシュしてセッション切れを防止
+        // トークンをキャッシュから取得（強制リフレッシュしない）
+        // 強制リフレッシュだとネットワーク障害時にセッション切れと判定される可能性があるため
         try {
-          await user.getIdToken(true);
+          await user.getIdToken(false);
         } catch (err) {
-          console.warn('トークンリフレッシュ失敗:', err);
+          console.warn('トークン取得失敗（セッションは維持）:', err);
         }
-        const profile = await getUserProfile(user.uid);
-        set({ profile, loading: false, initialized: true });
+        try {
+          const profile = await getUserProfile(user.uid);
+          set({ profile, loading: false, initialized: true });
+        } catch (profileErr) {
+          // プロフィール取得失敗してもユーザーはログイン状態を維持
+          console.warn('プロフィール取得失敗（セッションは維持）:', profileErr);
+          set({ loading: false, initialized: true });
+        }
       } else {
         set({ profile: null, loading: false, initialized: true });
       }
