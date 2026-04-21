@@ -99,16 +99,16 @@ export default function CreatePage() {
     if (!file) return;
 
     try {
-      // スマホの高解像度写真対策で Canvas リサイズしてから使う
-      // 1MB超 or JPEG/PNG以外は必ず一度Canvasで再エンコード
-      let processedFile = file;
-      if (file.size > 1 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(file.type)) {
-        processedFile = await resizeImage(file, 1280, 0.85);
-      }
+      // 常に Canvas で JPEG に正規化（HEIC/WebP/HEIF/透過PNGなどもJPEG化）
+      // これでサーバー側（sharp）は常に JPEG を受け取り、HEIC未対応問題を回避
+      let processedFile = await resizeImage(file, 1280, 0.85);
 
       // 保険: それでも2MBを超えていたら低画質で再リサイズ
       if (processedFile.size > 2 * 1024 * 1024) {
         processedFile = await resizeImage(file, 1024, 0.7);
+      }
+      if (processedFile.size > 2 * 1024 * 1024) {
+        processedFile = await resizeImage(file, 800, 0.6);
       }
 
       if (processedFile.size > 2 * 1024 * 1024) {
@@ -123,7 +123,10 @@ export default function CreatePage() {
       setError('');
     } catch (err) {
       console.error('画像前処理エラー:', err);
-      setError('画像の読み込みに失敗しました');
+      const msg = err instanceof Error ? err.message : '画像の読み込みに失敗しました';
+      setError(
+        `画像の読み込みに失敗しました: ${msg}。iPhoneの場合は設定→カメラ→フォーマットを「互換性優先」にしてJPEGで保存するか、別の画像をお試しください`
+      );
     }
   };
 
@@ -148,7 +151,9 @@ export default function CreatePage() {
         setProcessedImage(`data:image/png;base64,${data.data.processedImageBase64}`);
         setStep(2);
       } else {
-        setError(data.error || data.details || '画像処理に失敗しました');
+        const errMsg = data.error || '画像処理に失敗しました';
+        const detailMsg = data.details ? `（詳細: ${data.details}）` : '';
+        setError(`${errMsg}${detailMsg}`);
       }
     } catch (err) {
       console.error('画像処理呼び出しエラー:', err);

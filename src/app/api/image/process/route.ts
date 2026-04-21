@@ -34,13 +34,26 @@ export async function POST(request: NextRequest) {
     const originalSize = buffer.length;
 
     // Sharp処理パイプライン（仕様書 6.1準拠）
-    const processedBuffer = await sharp(buffer)
-      .resize(800, 800, { fit: 'inside' })     // a. リサイズ
-      .grayscale()                               // b. グレースケール化
-      .threshold(128)                            // c. 白黒二値化
-      .flatten({ background: '#FFFFFF' })        // d. 背景除去（白）
-      .png()
-      .toBuffer();
+    let processedBuffer: Buffer;
+    try {
+      processedBuffer = await sharp(buffer, { failOn: 'none' })
+        .rotate()                                // EXIF回転を正規化
+        .resize(800, 800, { fit: 'inside' })     // a. リサイズ
+        .grayscale()                             // b. グレースケール化
+        .threshold(128)                          // c. 白黒二値化
+        .flatten({ background: '#FFFFFF' })      // d. 背景除去（白）
+        .png()
+        .toBuffer();
+    } catch (sharpErr) {
+      console.error('sharp処理エラー:', sharpErr);
+      const msg = sharpErr instanceof Error ? sharpErr.message : '不明なsharpエラー';
+      return errorResponse(
+        '画像の形式に対応していません。別の画像（JPEGやPNG）でお試しください',
+        'UNSUPPORTED_IMAGE',
+        400,
+        msg
+      );
+    }
 
     // 改善案6: Base64で返してクライアント側でプレビュー
     const processedImageBase64 = processedBuffer.toString('base64');
