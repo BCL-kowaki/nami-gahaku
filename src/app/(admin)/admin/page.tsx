@@ -12,23 +12,22 @@ import Image from 'next/image';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Loading from '@/components/ui/Loading';
+import { getQuizStats } from '@/lib/firebase/firestore';
 import {
-  getAllUsers,
-  getAllQuizzesAdmin,
-  getQuizStats,
-  getAdminSettings,
-  updateAdminSettings,
-  updateQuiz,
-  deleteQuiz,
-  deleteUser,
-  migrateExistingQuizzesToOfficial,
-  getAllAnnouncements,
-  createAnnouncement,
-  updateAnnouncement,
-  deleteAnnouncement,
-  updateUserProfile,
-  type AdminSettings,
-} from '@/lib/firebase/firestore';
+  apiGetUsers,
+  apiUpdateUser,
+  apiDeleteUser,
+  apiGetQuizzes,
+  apiUpdateQuiz,
+  apiDeleteQuiz,
+  apiMigrateQuizzes,
+  apiGetAnnouncements,
+  apiCreateAnnouncement,
+  apiUpdateAnnouncement,
+  apiDeleteAnnouncement,
+  apiGetAdminSettings,
+  apiUpdateAdminSettings,
+} from '@/lib/adminApi';
 import type { UserProfile, Quiz, QuizCategory, Announcement } from '@/types';
 import { getEtoDisplayText } from '@/lib/zodiac';
 
@@ -130,7 +129,7 @@ export default function AdminPage() {
   const fetchUsers = useCallback(async () => {
     setLoadingUsers(true);
     try {
-      const data = await getAllUsers();
+      const data = await apiGetUsers();
       setUsers(data);
     } catch (err) {
       console.error('ユーザー取得エラー:', err);
@@ -142,7 +141,7 @@ export default function AdminPage() {
   const fetchQuizzes = useCallback(async () => {
     setLoadingQuizzes(true);
     try {
-      const data = await getAllQuizzesAdmin();
+      const data = await apiGetQuizzes();
       setQuizzes(data);
     } catch (err) {
       console.error('クイズ取得エラー:', err);
@@ -153,7 +152,7 @@ export default function AdminPage() {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const settings = await getAdminSettings();
+      const settings = await apiGetAdminSettings();
       if (settings) {
         setAdminId(settings.adminId);
         setAdminPassword(settings.adminPassword);
@@ -166,7 +165,7 @@ export default function AdminPage() {
   const fetchAnnouncements = useCallback(async () => {
     setLoadingAnnouncements(true);
     try {
-      const data = await getAllAnnouncements();
+      const data = await apiGetAnnouncements();
       setAnnouncements(data);
     } catch (err) {
       console.error('お知らせ取得エラー:', err);
@@ -187,10 +186,9 @@ export default function AdminPage() {
     if (!adminId.trim() || !adminPassword.trim()) return;
     setSavingSettings(true);
     try {
-      await updateAdminSettings({
-        adminId: adminId.trim(),
-        adminPassword: adminPassword.trim(),
-      });
+      await apiUpdateAdminSettings(adminId.trim(), adminPassword.trim());
+      // パスワードが変わった場合は新しいものを sessionStorage に保存
+      sessionStorage.setItem('nami-admin-pass', adminPassword.trim());
       showMessage('管理者設定を更新しました');
     } catch (err) {
       console.error('設定更新エラー:', err);
@@ -205,7 +203,7 @@ export default function AdminPage() {
   const handleDeleteUser = async (uid: string) => {
     if (deletingUserId === uid) {
       try {
-        await deleteUser(uid);
+        await apiDeleteUser(uid);
         setUsers(prev => prev.filter(u => u.uid !== uid));
         showMessage('ユーザーを削除しました');
       } catch (err) {
@@ -241,7 +239,7 @@ export default function AdminPage() {
       if (editUserBirthday) {
         updates.birthday = editUserBirthday;
       }
-      await updateUserProfile(editingUserId, updates as Partial<UserProfile>);
+      await apiUpdateUser(editingUserId, updates as Partial<UserProfile>);
       setUsers(prev => prev.map(u =>
         u.uid === editingUserId
           ? { ...u, displayName: editUserName.trim(), birthday: editUserBirthday || u.birthday, totalScore: editUserScore, totalAnswered: editUserAnswered }
@@ -268,7 +266,7 @@ export default function AdminPage() {
     if (deletingQuizId === quizId) {
       // 2回目タップ → 実際に削除
       try {
-        await deleteQuiz(quizId);
+        await apiDeleteQuiz(quizId);
         setQuizzes(prev => prev.filter(q => q.id !== quizId));
         showMessage('クイズを削除しました');
       } catch (err) {
@@ -287,7 +285,7 @@ export default function AdminPage() {
   // クイズ表示/非表示切り替え
   const handleToggleQuizHidden = async (quizId: string, currentHidden: boolean) => {
     try {
-      await updateQuiz(quizId, { isHidden: !currentHidden });
+      await apiUpdateQuiz(quizId, { isHidden: !currentHidden });
       setQuizzes(prev => prev.map(q =>
         q.id === quizId ? { ...q, isHidden: !currentHidden } : q
       ));
@@ -301,7 +299,7 @@ export default function AdminPage() {
   const handleMigrateToOfficial = async () => {
     setMigrating(true);
     try {
-      const count = await migrateExistingQuizzesToOfficial();
+      const count = await apiMigrateQuizzes();
       showMessage(`${count}件のクイズを公式に変換しました`);
       fetchQuizzes();
     } catch (err) {
@@ -316,7 +314,7 @@ export default function AdminPage() {
     if (!newAnnouncementTitle.trim() || !newAnnouncementMessage.trim()) return;
     setCreatingAnnouncement(true);
     try {
-      await createAnnouncement(newAnnouncementTitle.trim(), newAnnouncementMessage.trim());
+      await apiCreateAnnouncement(newAnnouncementTitle.trim(), newAnnouncementMessage.trim());
       setNewAnnouncementTitle('');
       setNewAnnouncementMessage('');
       showMessage('お知らせを作成しました');
@@ -331,7 +329,7 @@ export default function AdminPage() {
   // お知らせ有効/無効切り替え
   const handleToggleAnnouncement = async (id: string, currentActive: boolean) => {
     try {
-      await updateAnnouncement(id, { isActive: !currentActive });
+      await apiUpdateAnnouncement(id, { isActive: !currentActive });
       setAnnouncements(prev => prev.map(a =>
         a.id === id ? { ...a, isActive: !currentActive } : a
       ));
@@ -353,7 +351,7 @@ export default function AdminPage() {
     if (!editingAnnouncementId || !editTitle.trim() || !editMessage.trim()) return;
     setSavingEdit(true);
     try {
-      await updateAnnouncement(editingAnnouncementId, {
+      await apiUpdateAnnouncement(editingAnnouncementId, {
         title: editTitle.trim(),
         message: editMessage.trim(),
       });
@@ -382,7 +380,7 @@ export default function AdminPage() {
   const handleDeleteAnnouncement = async (id: string) => {
     if (deletingAnnouncementId === id) {
       try {
-        await deleteAnnouncement(id);
+        await apiDeleteAnnouncement(id);
         setAnnouncements(prev => prev.filter(a => a.id !== id));
         showMessage('お知らせを削除しました');
       } catch (err) {
@@ -399,6 +397,7 @@ export default function AdminPage() {
   // ログアウト
   const handleLogout = () => {
     sessionStorage.removeItem('nami-admin');
+    sessionStorage.removeItem('nami-admin-pass');
     router.replace('/login');
   };
 
@@ -448,9 +447,8 @@ export default function AdminPage() {
     setCreateLoading(true);
     setCreateError('');
     try {
-      // 管理者パスワードを取得
-      const settings = await getAdminSettings();
-      const currentAdminPassword = settings?.adminPassword ?? 'admin';
+      // 管理者パスワード（ログイン時に sessionStorage に保存したもの）を使用
+      const currentAdminPassword = sessionStorage.getItem('nami-admin-pass') ?? 'admin';
 
       // サーバーサイドAPI経由で画像アップロード＋クイズ作成
       const res = await fetch('/api/admin/quiz/create', {

@@ -1,6 +1,7 @@
 // Firebase Admin SDK (サーバーサイド専用)
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
+import { getFirestore } from 'firebase-admin/firestore';
 
 function getAdminApp(): App {
   const existing = getApps();
@@ -29,3 +30,4 @@ function getAdminApp(): App {
 
 const adminApp = getAdminApp();
 export const adminStorage = getStorage(adminApp);
+export const adminDb = getFirestore(adminApp);

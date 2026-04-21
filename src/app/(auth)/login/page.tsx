@@ -11,7 +11,6 @@ import { browserLocalPersistence, browserSessionPersistence, setPersistence } fr
 import { auth } from '@/lib/firebase/config';
 import { logIn } from '@/lib/firebase/auth';
 import { useAuthStore } from '@/stores/authStore';
-import { getAdminSettings } from '@/lib/firebase/firestore';
 
 export default function LoginPage() {
   const [loginId, setLoginId] = useState('');
@@ -29,15 +28,25 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 管理者ログインチェック
-      const adminSettings = await getAdminSettings();
-      const adminId = adminSettings?.adminId ?? 'admin';
-      const adminPass = adminSettings?.adminPassword ?? 'admin';
-
-      if (loginId === adminId && password === adminPass) {
-        sessionStorage.setItem('nami-admin', 'true');
-        router.push('/admin');
-        return;
+      // 管理者ログインチェック（サーバーサイド検証、Firestoreルールに依存しない）
+      try {
+        const verifyRes = await fetch('/api/admin/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminId: loginId, adminPassword: password }),
+        });
+        if (verifyRes.ok) {
+          const verifyJson = await verifyRes.json();
+          if (verifyJson.success) {
+            sessionStorage.setItem('nami-admin', 'true');
+            // APIルート認証用に入力パスワードを保持
+            sessionStorage.setItem('nami-admin-pass', password);
+            router.push('/admin');
+            return;
+          }
+        }
+      } catch (adminErr) {
+        console.warn('管理者検証通信エラー:', adminErr);
       }
 
       // ログイン記憶の永続性を設定
@@ -45,7 +54,8 @@ export default function LoginPage() {
       await logIn(loginId, password);
       await refreshProfile();
       router.push('/play');
-    } catch {
+    } catch (err) {
+      console.error('ログインエラー:', err);
       setError('IDまたはパスワードが正しくありません');
     } finally {
       setLoading(false);

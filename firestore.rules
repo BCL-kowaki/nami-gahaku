@@ -13,6 +13,25 @@ service cloud.firestore {
         allow read, write: if request.auth != null
                             && request.auth.uid == uid;
       }
+      // 占い（日次キャッシュ）
+      match /fortunes/{docId} {
+        allow read, write: if request.auth != null
+                            && request.auth.uid == uid;
+      }
+      // チャットルーム
+      match /chatRooms/{roomId} {
+        allow read, write: if request.auth != null
+                            && request.auth.uid == uid;
+        match /messages/{msgId} {
+          allow read, write: if request.auth != null
+                              && request.auth.uid == uid;
+        }
+      }
+      // ユーザー設定（メモリ・画像生成回数など）
+      match /settings/{docId} {
+        allow read, write: if request.auth != null
+                            && request.auth.uid == uid;
+      }
     }
     // quizzes: 認証ユーザーは読み取り可。作成は認証必須。
     // 更新・削除は作成者本人のみ（改善案3: update追加）
@@ -27,6 +46,16 @@ service cloud.firestore {
     // themes: 読み取りのみ
     match /themes/{themeId} {
       allow read: if request.auth != null;
+    }
+    // settings/admin: Admin SDK経由のみアクセス可（クライアントは完全禁止）
+    match /settings/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+    // announcements: 認証ユーザーのみ読み取り可。書き込みはAdmin SDK経由のみ
+    match /announcements/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
   }
 }
