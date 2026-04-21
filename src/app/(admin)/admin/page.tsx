@@ -7,6 +7,7 @@ import {
   Shield, Users, ImageIcon, Settings, LogOut, Pencil,
   Check, Eye, EyeOff, Save, BarChart3, AlertTriangle,
   Upload, ArrowLeft, ArrowRight, Send, Trash2, Bell, Plus,
+  X, Search,
 } from 'lucide-react';
 import Image from 'next/image';
 import Button from '@/components/ui/Button';
@@ -21,6 +22,7 @@ import {
   apiChangeUserLoginId,
   apiGetQuizzes,
   apiUpdateQuiz,
+  apiUpdateQuizFull,
   apiDeleteQuiz,
   apiMigrateQuizzes,
   apiGetAnnouncements,
@@ -104,6 +106,22 @@ export default function AdminPage() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState(false);
+
+  // クイズ編集
+  const [editingQuizId, setEditingQuizId] = useState<string | null>(null);
+  const [editQuizAnswer, setEditQuizAnswer] = useState('');
+  const [editQuizCategory, setEditQuizCategory] = useState<QuizCategory>('その他');
+  const [editQuizDummies, setEditQuizDummies] = useState<[string, string, string]>(['', '', '']);
+  const [editQuizCreatorUid, setEditQuizCreatorUid] = useState('');   // 'official' or user uid
+  const [editQuizCreatorName, setEditQuizCreatorName] = useState('');
+  const [editQuizIsOfficial, setEditQuizIsOfficial] = useState(false);
+  const [editQuizImageFile, setEditQuizImageFile] = useState<File | null>(null);
+  const [editQuizImagePreview, setEditQuizImagePreview] = useState('');
+  const [editQuizProcessedImage, setEditQuizProcessedImage] = useState('');
+  const [editQuizProcessing, setEditQuizProcessing] = useState(false);
+  const [editQuizCurrentImageUrl, setEditQuizCurrentImageUrl] = useState('');
+  const [savingQuiz, setSavingQuiz] = useState(false);
+  const [editQuizUserSearch, setEditQuizUserSearch] = useState(''); // 投稿者検索ボックスの入力
 
   // お知らせ
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -332,6 +350,147 @@ export default function AdminPage() {
     setEditUserOriginalLoginId('');
     setEditUserNewPassword('');
     setShowEditUserPassword(false);
+  };
+
+  // === クイズ編集 ===
+
+  // 編集モーダルを開く
+  const handleOpenEditQuiz = (quiz: Quiz) => {
+    if (!quiz.id) return;
+    setEditingQuizId(quiz.id);
+    setEditQuizAnswer(quiz.answer);
+    setEditQuizCategory(quiz.category);
+    setEditQuizDummies([...quiz.dummyChoices] as [string, string, string]);
+    setEditQuizCreatorUid(quiz.creatorUid);
+    setEditQuizCreatorName(quiz.creatorName);
+    setEditQuizIsOfficial(!!quiz.isOfficial);
+    setEditQuizImageFile(null);
+    setEditQuizImagePreview('');
+    setEditQuizProcessedImage('');
+    setEditQuizCurrentImageUrl(quiz.imageUrl);
+    setEditQuizUserSearch('');
+  };
+
+  // 編集モーダルを閉じる
+  const handleCloseEditQuiz = () => {
+    setEditingQuizId(null);
+    setEditQuizImageFile(null);
+    setEditQuizImagePreview('');
+    setEditQuizProcessedImage('');
+    setEditQuizUserSearch('');
+  };
+
+  // 差し替え画像の選択
+  const handleEditQuizImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showMessage('画像は2MB以下にしてください');
+      return;
+    }
+    setEditQuizImageFile(file);
+    // プレビュー作成
+    const reader = new FileReader();
+    reader.onload = () => setEditQuizImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+
+    // 同時に白黒処理をサーバーで実行
+    setEditQuizProcessing(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await fetch('/api/image/process', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.success) {
+        setEditQuizProcessedImage(`data:image/png;base64,${data.data.processedImageBase64}`);
+      } else {
+        showMessage(data.error || '画像処理に失敗しました');
+      }
+    } catch {
+      showMessage('画像処理に失敗しました');
+    } finally {
+      setEditQuizProcessing(false);
+    }
+  };
+
+  // 投稿者を公式（nami）に設定
+  const handleSetCreatorOfficial = () => {
+    setEditQuizCreatorUid('official');
+    setEditQuizCreatorName('nami【公式】');
+    setEditQuizIsOfficial(true);
+  };
+
+  // 投稿者をユーザーに設定
+  const handleSetCreatorUser = (u: UserProfile) => {
+    setEditQuizCreatorUid(u.uid);
+    setEditQuizCreatorName(u.displayName);
+    setEditQuizIsOfficial(false);
+    setEditQuizUserSearch('');
+  };
+
+  // クイズ編集保存
+  const handleSaveQuiz = async () => {
+    if (!editingQuizId) return;
+    if (!editQuizAnswer.trim()) {
+      showMessage('答えは必須です');
+      return;
+    }
+    if (editQuizDummies.some(d => !d.trim())) {
+      showMessage('ダミー選択肢を3つすべて入力してください');
+      return;
+    }
+    if (!editQuizCreatorUid) {
+      showMessage('投稿者を選択してください');
+      return;
+    }
+    // 画像を差し替える場合は処理済み画像が揃っているか確認
+    if (editQuizImageFile && !editQuizProcessedImage) {
+      showMessage('画像処理中です。少し待ってから再度お試しください');
+      return;
+    }
+
+    setSavingQuiz(true);
+    try {
+      await apiUpdateQuizFull({
+        quizId: editingQuizId,
+        answer: editQuizAnswer.trim(),
+        category: editQuizCategory,
+        dummyChoices: [editQuizDummies[0].trim(), editQuizDummies[1].trim(), editQuizDummies[2].trim()],
+        creatorUid: editQuizCreatorUid,
+        creatorName: editQuizCreatorName,
+        isOfficial: editQuizIsOfficial,
+        imageBase64: editQuizProcessedImage || undefined,
+        originalImageBase64: editQuizImagePreview || undefined,
+      });
+
+      // 一覧の表示を更新
+      setQuizzes(prev => prev.map(q =>
+        q.id === editingQuizId
+          ? {
+              ...q,
+              answer: editQuizAnswer.trim(),
+              category: editQuizCategory,
+              dummyChoices: [editQuizDummies[0].trim(), editQuizDummies[1].trim(), editQuizDummies[2].trim()] as [string, string, string],
+              creatorUid: editQuizCreatorUid,
+              creatorName: editQuizCreatorName,
+              isOfficial: editQuizIsOfficial,
+              ...(editQuizProcessedImage ? { imageUrl: editQuizProcessedImage } : {}),
+            }
+          : q
+      ));
+      showMessage('クイズを更新しました');
+      handleCloseEditQuiz();
+      // 画像を差し替えた場合は最新URLを取得するため再フェッチ
+      if (editQuizProcessedImage) {
+        fetchQuizzes();
+      }
+    } catch (err) {
+      console.error('クイズ更新エラー:', err);
+      const msg = err instanceof Error ? err.message : '更新に失敗しました';
+      showMessage(msg);
+    } finally {
+      setSavingQuiz(false);
+    }
   };
 
   // クイズ削除確認
@@ -866,6 +1025,13 @@ export default function AdminPage() {
                       </div>
                       <div className="flex flex-col gap-1 flex-shrink-0">
                         <button
+                          onClick={() => handleOpenEditQuiz(quiz)}
+                          className="p-1.5 rounded-[5px] hover:bg-[var(--color-surface)] transition-colors"
+                          title="編集"
+                        >
+                          <Pencil className="w-4 h-4 text-[var(--color-text-muted)]" />
+                        </button>
+                        <button
                           onClick={() => quiz.id && handleToggleQuizHidden(quiz.id, isHidden)}
                           className="p-1.5 rounded-[5px] hover:bg-[var(--color-surface)] transition-colors"
                           title={isHidden ? '表示する' : '非表示にする'}
@@ -891,6 +1057,208 @@ export default function AdminPage() {
             )}
           </motion.div>
         )}
+
+        {/* ================= クイズ編集モーダル ================= */}
+        {editingQuizId && (() => {
+          // 投稿者検索結果（表示名またはIDに部分一致、最大8件）
+          const searchQ = editQuizUserSearch.trim().toLowerCase();
+          const searchResults = searchQ
+            ? users.filter(u => {
+                const name = u.displayName.toLowerCase();
+                const id = resolveDisplayLoginId(u).toLowerCase();
+                return name.includes(searchQ) || id.includes(searchQ);
+              }).slice(0, 8)
+            : [];
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto" onClick={handleCloseEditQuiz}>
+              <div className="absolute inset-0 bg-black/50" />
+              <div
+                className="relative z-10 w-full max-w-md card p-4 my-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base font-bold">クイズを編集</h3>
+                  <button
+                    onClick={handleCloseEditQuiz}
+                    className="p-1 rounded-[5px] hover:bg-[var(--color-surface)]"
+                  >
+                    <X className="w-5 h-5 text-[var(--color-text-muted)]" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {/* 画像 */}
+                  <div>
+                    <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">画像</label>
+                    <div className="flex gap-2 items-start">
+                      {/* 現在 or 新プレビュー */}
+                      <div className="relative w-24 h-24 flex-shrink-0 rounded-[5px] overflow-hidden border border-[var(--color-border)] bg-white">
+                        <Image
+                          src={editQuizProcessedImage || editQuizCurrentImageUrl}
+                          alt=""
+                          fill
+                          className="object-contain p-1"
+                          sizes="96px"
+                          unoptimized
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="flex items-center justify-center gap-1 px-3 py-2 rounded-[5px] border border-dashed border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-surface)] text-xs">
+                          <Upload className="w-3.5 h-3.5" />
+                          画像を差し替え
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleEditQuizImageSelect}
+                            className="hidden"
+                          />
+                        </label>
+                        {editQuizProcessing && (
+                          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">画像処理中...</p>
+                        )}
+                        {editQuizProcessedImage && !editQuizProcessing && (
+                          <p className="text-[10px] text-[var(--color-correct)] mt-1">✓ 白黒処理完了</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 答え */}
+                  <div>
+                    <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">答え</label>
+                    <input
+                      type="text"
+                      value={editQuizAnswer}
+                      onChange={(e) => setEditQuizAnswer(e.target.value)}
+                      className="input-field"
+                      maxLength={20}
+                    />
+                  </div>
+
+                  {/* カテゴリ */}
+                  <div>
+                    <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">カテゴリ</label>
+                    <select
+                      value={editQuizCategory}
+                      onChange={(e) => setEditQuizCategory(e.target.value as QuizCategory)}
+                      className="input-field"
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* ダミー選択肢（残り3択） */}
+                  <div>
+                    <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">残りの3択（ダミー選択肢）</label>
+                    <div className="flex flex-col gap-1.5">
+                      {[0, 1, 2].map((i) => (
+                        <input
+                          key={i}
+                          type="text"
+                          value={editQuizDummies[i]}
+                          onChange={(e) => {
+                            const next = [...editQuizDummies] as [string, string, string];
+                            next[i] = e.target.value;
+                            setEditQuizDummies(next);
+                          }}
+                          className="input-field"
+                          placeholder={`ダミー${i + 1}`}
+                          maxLength={20}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 投稿者 */}
+                  <div>
+                    <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">投稿者</label>
+                    <div className="flex items-center gap-2 p-2 rounded-[5px] border border-[var(--color-border)] bg-[var(--color-surface)]">
+                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-[var(--color-border)]">
+                        {editQuizIsOfficial ? (
+                          <Shield className="w-4 h-4 text-blue-600" />
+                        ) : (
+                          <Users className="w-4 h-4 text-[var(--color-text-muted)]" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold truncate">{editQuizCreatorName || '未選択'}</p>
+                        <p className="text-[10px] text-[var(--color-text-muted)] truncate font-mono">{editQuizCreatorUid || ''}</p>
+                      </div>
+                    </div>
+
+                    {/* 公式(admin)セット */}
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        onClick={handleSetCreatorOfficial}
+                        variant="outline"
+                        className={`flex-1 text-xs ${editQuizIsOfficial ? 'ring-2 ring-[var(--color-text-primary)]' : ''}`}
+                      >
+                        <Shield className="w-3.5 h-3.5" />運営(admin)
+                      </Button>
+                    </div>
+
+                    {/* ユーザー検索 */}
+                    <div className="mt-2">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" />
+                        <input
+                          type="text"
+                          value={editQuizUserSearch}
+                          onChange={(e) => setEditQuizUserSearch(e.target.value)}
+                          className="input-field pl-7 text-xs"
+                          placeholder="ユーザーを検索（表示名/ID）"
+                        />
+                      </div>
+                      {searchResults.length > 0 && (
+                        <div className="mt-1 max-h-40 overflow-y-auto border border-[var(--color-border)] rounded-[5px] bg-white">
+                          {searchResults.map((u) => (
+                            <button
+                              key={u.uid}
+                              type="button"
+                              onClick={() => handleSetCreatorUser(u)}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[var(--color-surface)] border-b border-[var(--color-border)] last:border-b-0 text-left"
+                            >
+                              <div className="w-6 h-6 rounded-full bg-[var(--color-surface)] flex items-center justify-center flex-shrink-0">
+                                <Users className="w-3 h-3 text-[var(--color-text-muted)]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold truncate">{u.displayName}</p>
+                                <p className="text-[9px] text-[var(--color-text-muted)] truncate font-mono">
+                                  {resolveDisplayLoginId(u)}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {searchQ && searchResults.length === 0 && (
+                        <p className="text-[10px] text-[var(--color-text-muted)] mt-1">該当するユーザーがいません</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 保存・キャンセル */}
+                  <div className="flex gap-2 mt-1">
+                    <Button onClick={handleCloseEditQuiz} variant="outline" className="flex-1 text-xs">
+                      キャンセル
+                    </Button>
+                    <Button
+                      onClick={handleSaveQuiz}
+                      loading={savingQuiz}
+                      disabled={!editQuizAnswer.trim() || editQuizProcessing}
+                      className="flex-1 text-xs"
+                    >
+                      <Save className="w-3.5 h-3.5" />保存
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ================= クイズ作成（公式） ================= */}
         {activeTab === 'create' && (

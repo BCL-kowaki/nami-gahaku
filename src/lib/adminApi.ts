@@ -58,6 +58,25 @@ export async function apiGetQuizzes(): Promise<Quiz[]> {
   const data = await request<{ quizzes: Quiz[] }>('/api/admin/quizzes');
   return data.quizzes;
 }
+// クイズのフル編集（画像差し替え対応）
+export interface QuizFullUpdatePayload {
+  quizId: string;
+  answer?: string;
+  category?: Quiz['category'];
+  dummyChoices?: [string, string, string];
+  creatorUid?: string;
+  creatorName?: string;
+  isOfficial?: boolean;
+  imageBase64?: string;
+  originalImageBase64?: string;
+}
+export async function apiUpdateQuizFull(payload: QuizFullUpdatePayload): Promise<void> {
+  await request('/api/admin/quiz/update', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 // クイズ更新
 export async function apiUpdateQuiz(quizId: string, data: Partial<Quiz>): Promise<void> {
   await request('/api/admin/quizzes', {
