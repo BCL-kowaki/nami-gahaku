@@ -5,6 +5,7 @@ import {
   getAllUsersAdmin,
   updateUserAdmin,
   deleteUserAdmin,
+  updateUserPasswordAdmin,
 } from '@/lib/firebase/firestoreAdmin';
 import { successResponse, errorResponse, serverErrorResponse } from '@/lib/utils';
 import type { UserProfile } from '@/types';
@@ -29,22 +30,39 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PATCH: ユーザー情報更新
+// PATCH: ユーザー情報更新 または パスワード変更
 export async function PATCH(request: NextRequest) {
   try {
     const pass = getAdminPass(request);
     if (!(await verifyAdminPassword(pass))) {
       return errorResponse('管理者認証に失敗しました', 'UNAUTHORIZED', 401);
     }
-    const body = await request.json() as { uid: string; data: Partial<UserProfile> };
-    if (!body.uid || !body.data) {
+    const body = await request.json() as
+      | { action?: 'update'; uid: string; data: Partial<UserProfile> }
+      | { action: 'changePassword'; uid: string; newPassword: string };
+
+    if ('action' in body && body.action === 'changePassword') {
+      if (!body.uid || !body.newPassword) {
+        return errorResponse('uid と newPassword は必須です', 'INVALID_REQUEST');
+      }
+      if (body.newPassword.length < 6) {
+        return errorResponse('パスワードは6文字以上にしてください', 'INVALID_REQUEST');
+      }
+      await updateUserPasswordAdmin(body.uid, body.newPassword);
+      return successResponse({ ok: true });
+    }
+
+    // デフォルト: プロフィール更新
+    const updateBody = body as { uid: string; data: Partial<UserProfile> };
+    if (!updateBody.uid || !updateBody.data) {
       return errorResponse('uid と data は必須です', 'INVALID_REQUEST');
     }
-    await updateUserAdmin(body.uid, body.data);
+    await updateUserAdmin(updateBody.uid, updateBody.data);
     return successResponse({ ok: true });
   } catch (err) {
     console.error('ユーザー更新エラー:', err);
-    return serverErrorResponse();
+    const msg = err instanceof Error ? err.message : 'サーバーエラー';
+    return errorResponse(msg, 'INTERNAL_ERROR', 500);
   }
 }
 

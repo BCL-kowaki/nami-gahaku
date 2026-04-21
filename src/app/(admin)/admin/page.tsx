@@ -17,6 +17,7 @@ import {
   apiGetUsers,
   apiUpdateUser,
   apiDeleteUser,
+  apiChangeUserPassword,
   apiGetQuizzes,
   apiUpdateQuiz,
   apiDeleteQuiz,
@@ -112,6 +113,8 @@ export default function AdminPage() {
   const [editUserBirthday, setEditUserBirthday] = useState('');
   const [editUserScore, setEditUserScore] = useState(0);
   const [editUserAnswered, setEditUserAnswered] = useState(0);
+  const [editUserNewPassword, setEditUserNewPassword] = useState('');
+  const [showEditUserPassword, setShowEditUserPassword] = useState(false);
   const [savingUser, setSavingUser] = useState(false);
 
   // メッセージ
@@ -224,11 +227,18 @@ export default function AdminPage() {
     setEditUserBirthday(u.birthday || '');
     setEditUserScore(u.totalScore);
     setEditUserAnswered(u.totalAnswered);
+    setEditUserNewPassword('');
+    setShowEditUserPassword(false);
   };
 
-  // ユーザー編集保存
+  // ユーザー編集保存（プロフィール＋任意でパスワード変更）
   const handleSaveUser = async () => {
     if (!editingUserId || !editUserName.trim()) return;
+    // パスワードを変更する場合は6文字以上のバリデーション
+    if (editUserNewPassword && editUserNewPassword.length < 6) {
+      showMessage('パスワードは6文字以上にしてください');
+      return;
+    }
     setSavingUser(true);
     try {
       const updates: Record<string, unknown> = {
@@ -240,15 +250,24 @@ export default function AdminPage() {
         updates.birthday = editUserBirthday;
       }
       await apiUpdateUser(editingUserId, updates as Partial<UserProfile>);
+
+      // パスワードが入力されていれば変更
+      if (editUserNewPassword) {
+        await apiChangeUserPassword(editingUserId, editUserNewPassword);
+      }
+
       setUsers(prev => prev.map(u =>
         u.uid === editingUserId
           ? { ...u, displayName: editUserName.trim(), birthday: editUserBirthday || u.birthday, totalScore: editUserScore, totalAnswered: editUserAnswered }
           : u
       ));
       setEditingUserId(null);
-      showMessage('ユーザー情報を更新しました');
+      setEditUserNewPassword('');
+      showMessage(editUserNewPassword ? 'ユーザー情報とパスワードを更新しました' : 'ユーザー情報を更新しました');
     } catch (err) {
       console.error('ユーザー更新エラー:', err);
+      const msg = err instanceof Error ? err.message : '更新に失敗しました';
+      showMessage(msg);
     } finally {
       setSavingUser(false);
     }
@@ -257,6 +276,8 @@ export default function AdminPage() {
   // ユーザー編集キャンセル
   const handleCancelEditUser = () => {
     setEditingUserId(null);
+    setEditUserNewPassword('');
+    setShowEditUserPassword(false);
   };
 
   // クイズ削除確認
@@ -640,6 +661,30 @@ export default function AdminPage() {
                               />
                             </div>
                           </div>
+                          {/* パスワード変更（任意） */}
+                          <div>
+                            <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">
+                              新しいパスワード（変更する場合のみ入力／6文字以上）
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showEditUserPassword ? 'text' : 'password'}
+                                value={editUserNewPassword}
+                                onChange={(e) => setEditUserNewPassword(e.target.value)}
+                                className="input-field pr-10"
+                                placeholder="変更しない場合は空欄"
+                                autoComplete="new-password"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowEditUserPassword(!showEditUserPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
+                                tabIndex={-1}
+                              >
+                                {showEditUserPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
                           <div className="flex gap-2">
                             <Button onClick={handleCancelEditUser} variant="outline" className="flex-1 text-xs">
                               キャンセル
@@ -657,7 +702,12 @@ export default function AdminPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold truncate">{u.displayName}</p>
-                            <p className="text-[10px] text-[var(--color-text-muted)] truncate">{u.email}</p>
+                            <p className="text-[10px] text-[var(--color-text-muted)] truncate">
+                              ID: <span className="font-mono">{u.loginId ?? (u.email?.endsWith('@nami-quiz.app') ? u.email.replace('@nami-quiz.app', '') : u.email)}</span>
+                            </p>
+                            {!u.email?.endsWith('@nami-quiz.app') && (
+                              <p className="text-[10px] text-[var(--color-text-muted)] truncate">{u.email}</p>
+                            )}
                             {u.birthday && <p className="text-[10px] text-[var(--color-text-muted)]">🎂 {u.birthday}　{getEtoDisplayText(u.birthday)}</p>}
                             <div className="flex gap-3 mt-1.5">
                               <span className="text-[10px] text-[var(--color-text-muted)]">正解 <span className="font-bold text-[var(--color-text-primary)]">{u.totalScore}</span></span>

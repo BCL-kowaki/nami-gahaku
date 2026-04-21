@@ -1,5 +1,5 @@
 // Admin SDK 経由の Firestore ヘルパー（サーバーサイド専用）
-import { adminDb } from './admin';
+import { adminDb, adminAuthApp } from './admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { UserProfile, Quiz, Announcement } from '@/types';
 
@@ -73,6 +73,14 @@ export async function getAllAnnouncementsAdmin(): Promise<Announcement[]> {
 // ユーザー更新
 export async function updateUserAdmin(uid: string, data: Partial<UserProfile>): Promise<void> {
   await adminDb.collection('users').doc(uid).update(data);
+}
+
+// ユーザーのパスワードを変更（Admin SDK 経由で Firebase Auth を直接操作）
+export async function updateUserPasswordAdmin(uid: string, newPassword: string): Promise<void> {
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('パスワードは6文字以上にしてください');
+  }
+  await adminAuthApp.updateUser(uid, { password: newPassword });
 }
 
 // ユーザー削除（サブコレクション含む）

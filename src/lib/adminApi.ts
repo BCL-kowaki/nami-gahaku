@@ -38,6 +38,13 @@ export async function apiUpdateUser(uid: string, data: Partial<UserProfile>): Pr
 export async function apiDeleteUser(uid: string): Promise<void> {
   await request(`/api/admin/users?uid=${encodeURIComponent(uid)}`, { method: 'DELETE' });
 }
+// ユーザーのパスワード変更
+export async function apiChangeUserPassword(uid: string, newPassword: string): Promise<void> {
+  await request('/api/admin/users', {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'changePassword', uid, newPassword }),
+  });
+}
 
 // クイズ一覧
 export async function apiGetQuizzes(): Promise<Quiz[]> {

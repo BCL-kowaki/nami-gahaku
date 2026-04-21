@@ -9,6 +9,7 @@ export interface UserProfile {
   uid: string;
   displayName: string;
   email: string;
+  loginId?: string;           // ログインID（新方式で登録されたユーザー）
   birthday?: string;          // 誕生日 (YYYY-MM-DD)
   skipAnswered?: boolean;     // 正解済みクイズをスキップするか
   totalScore: number;         // 累積正解数
