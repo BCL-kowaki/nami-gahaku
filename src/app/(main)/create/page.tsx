@@ -50,22 +50,81 @@ export default function CreatePage() {
     }
   };
 
+  // 画像を Canvas でリサイズして JPEG Blob にする（スマホ高解像度写真対策）
+  const resizeImage = (file: File, maxSize = 1280, quality = 0.85): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new window.Image();
+      const reader = new FileReader();
+      reader.onload = () => {
+        img.onload = () => {
+          const { width, height } = img;
+          let newW = width;
+          let newH = height;
+          if (width > height && width > maxSize) {
+            newW = maxSize;
+            newH = Math.round((height * maxSize) / width);
+          } else if (height > maxSize) {
+            newH = maxSize;
+            newW = Math.round((width * maxSize) / height);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = newW;
+          canvas.height = newH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('Canvas context取得失敗'));
+          ctx.drawImage(img, 0, 0, newW, newH);
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) return reject(new Error('Blob変換失敗'));
+              const resized = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+                type: 'image/jpeg',
+              });
+              resolve(resized);
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        img.onerror = () => reject(new Error('画像読み込み失敗'));
+        img.src = reader.result as string;
+      };
+      reader.onerror = () => reject(new Error('ファイル読み込み失敗'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   // 画像選択
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 2MB制限チェック
-    if (file.size > 2 * 1024 * 1024) {
-      setError('画像は2MB以下にしてください');
-      return;
-    }
+    try {
+      // スマホの高解像度写真対策で Canvas リサイズしてから使う
+      // 1MB超 or JPEG/PNG以外は必ず一度Canvasで再エンコード
+      let processedFile = file;
+      if (file.size > 1 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(file.type)) {
+        processedFile = await resizeImage(file, 1280, 0.85);
+      }
 
-    setImageFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result as string);
-    reader.readAsDataURL(file);
-    setError('');
+      // 保険: それでも2MBを超えていたら低画質で再リサイズ
+      if (processedFile.size > 2 * 1024 * 1024) {
+        processedFile = await resizeImage(file, 1024, 0.7);
+      }
+
+      if (processedFile.size > 2 * 1024 * 1024) {
+        setError('画像が大きすぎます。別の画像をお試しください');
+        return;
+      }
+
+      setImageFile(processedFile);
+      const reader = new FileReader();
+      reader.onload = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(processedFile);
+      setError('');
+    } catch (err) {
+      console.error('画像前処理エラー:', err);
+      setError('画像の読み込みに失敗しました');
+    }
   };
 
   // Step1→Step2: 画像処理
@@ -89,13 +148,25 @@ export default function CreatePage() {
         setProcessedImage(`data:image/png;base64,${data.data.processedImageBase64}`);
         setStep(2);
       } else {
-        setError(data.error || '画像処理に失敗しました');
+        setError(data.error || data.details || '画像処理に失敗しました');
       }
-    } catch {
-      setError('画像処理に失敗しました');
+    } catch (err) {
+      console.error('画像処理呼び出しエラー:', err);
+      const msg = err instanceof Error ? err.message : '画像処理に失敗しました';
+      setError(`画像処理に失敗しました: ${msg}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  // base64 data URI を Blob に変換
+  const base64ToBlob = (dataUri: string, mimeType = 'image/png'): Blob => {
+    const base64Data = dataUri.replace(/^data:image\/\w+;base64,/, '');
+    const byteString = atob(base64Data);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+    return new Blob([ab], { type: mimeType });
   };
 
   // Step3: クイズ投稿
@@ -110,23 +181,32 @@ export default function CreatePage() {
     setError('');
 
     try {
-      // 画像をクライアント側から直接Firebase Storageにアップロード
-      const base64Data = processedImage.replace(/^data:image\/\w+;base64,/, '');
-      const byteString = atob(base64Data);
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-      const blob = new Blob([ab], { type: 'image/png' });
-
+      // 白黒変換後の画像を Firebase Storage にアップロード
+      const processedBlob = base64ToBlob(processedImage, 'image/png');
       const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
       const storageRef = ref(storage, `quiz-images/${user.uid}/${fileName}`);
-      await uploadBytes(storageRef, blob, { contentType: 'image/png' });
+      await uploadBytes(storageRef, processedBlob, { contentType: 'image/png' });
       const imageUrl = await getDownloadURL(storageRef);
 
-      // クイズ作成
-      await createQuiz({
+      // 元画像（カメラで撮った写真）も Storage にアップロード
+      // → Firestore の 1MB ドキュメント制限を超えないように URL で保存する
+      let originalImageUrl: string | undefined;
+      if (imagePreview && imagePreview.startsWith('data:')) {
+        try {
+          const origBlob = base64ToBlob(imagePreview, imageFile?.type || 'image/jpeg');
+          const origFileName = `${Date.now()}_${Math.random().toString(36).slice(2)}_original`;
+          const origRef = ref(storage, `quiz-images/${user.uid}/${origFileName}`);
+          await uploadBytes(origRef, origBlob, { contentType: imageFile?.type || 'image/jpeg' });
+          originalImageUrl = await getDownloadURL(origRef);
+        } catch (origErr) {
+          // 元画像のアップロード失敗はクイズ作成を止めない（白黒画像だけで投稿可能）
+          console.warn('元画像アップロード失敗（スキップ）:', origErr);
+        }
+      }
+
+      // クイズ作成（originalImageUrlが取得できたときのみフィールドを含める）
+      const quizData: Parameters<typeof createQuiz>[0] = {
         imageUrl,
-        originalImageUrl: imagePreview,
         answer,
         category,
         dummyChoices: dummies as [string, string, string],
@@ -134,11 +214,17 @@ export default function CreatePage() {
         creatorName: profile.displayName,
         isOfficial: false,
         themeId: theme || null,
-      });
+      };
+      if (originalImageUrl) {
+        quizData.originalImageUrl = originalImageUrl;
+      }
+      await createQuiz(quizData);
 
       setSuccess(true);
-    } catch {
-      setError('クイズの作成に失敗しました');
+    } catch (err) {
+      console.error('クイズ投稿エラー:', err);
+      const msg = err instanceof Error ? err.message : 'クイズの作成に失敗しました';
+      setError(`クイズの作成に失敗しました: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -241,7 +327,7 @@ export default function CreatePage() {
                 )}
                 <input
                   type="file"
-                  accept="image/jpeg,image/png"
+                  accept="image/*"
                   onChange={handleImageSelect}
                   className="hidden"
                 />

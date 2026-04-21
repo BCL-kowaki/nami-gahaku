@@ -18,9 +18,16 @@ export async function POST(request: NextRequest) {
       return errorResponse('画像は2MB以下にしてください', 'FILE_TOO_LARGE');
     }
 
-    // MIMEタイプチェック
-    if (!['image/jpeg', 'image/png'].includes(imageFile.type)) {
-      return errorResponse('JPEGまたはPNG画像のみ対応しています', 'INVALID_FORMAT');
+    // MIMEタイプチェック（sharpが対応する主要フォーマットを受け入れる）
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/webp',
+      'image/heic', 'image/heif', 'image/gif',
+    ];
+    if (imageFile.type && !allowedTypes.includes(imageFile.type)) {
+      return errorResponse(
+        `対応していない画像形式です (${imageFile.type})`,
+        'INVALID_FORMAT'
+      );
     }
 
     const buffer = Buffer.from(await imageFile.arrayBuffer());
@@ -47,7 +54,8 @@ export async function POST(request: NextRequest) {
     return successResponse(response);
   } catch (err) {
     console.error('画像処理エラー:', err);
-    return serverErrorResponse('画像処理に失敗しました');
+    const detail = err instanceof Error ? err.message : '不明なエラー';
+    return serverErrorResponse(`画像処理に失敗しました: ${detail}`);
   }
 }
 
