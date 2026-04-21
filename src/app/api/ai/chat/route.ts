@@ -4,6 +4,7 @@ import { successResponse, errorResponse, serverErrorResponse } from '@/lib/utils
 import { getChatModel, getImageModel } from '@/lib/ai/client';
 import { NAMI_CHARACTER_PROMPT } from '@/lib/ai/prompts/nami-character';
 import { IMAGE_STYLE_PROMPT } from '@/lib/ai/prompts/image-style';
+import { getSampleQuizImages } from '@/lib/ai/sample-images';
 
 // 画像リクエスト検知用キーワード
 const IMAGE_KEYWORDS = ['描いて', '書いて', '絵を', 'かいて', '画像', 'イラスト', '絵が見たい', '描け'];
@@ -241,13 +242,34 @@ async function handleImageRequest(message: string) {
   try {
     const model = getImageModel();
 
+    // なみ画伯の過去作品からランダムにサンプルを取得（few-shot）
+    const samples = await getSampleQuizImages(3);
+
     const prompt = `${IMAGE_STYLE_PROMPT}
+
+${samples.length > 0
+  ? '【参考画像】\n添付されている画像は、なみ画伯が過去に描いた作品です。これらの線の歪み方・太さ・手描き感・独特の下手さ・シンプルさを参考にして、同じような絵柄で描いてください。'
+  : ''}
 
 ユーザーのリクエスト: ${message}
 
 上記のスタイルに従って画像を生成してください。また、なみ画伯として短いコメント（50文字以内）もつけてください。`;
 
-    const result = await model.generateContent(prompt);
+    // 参考画像をGeminiに同時に渡す（few-shotスタイル転写）
+    const parts: Array<
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } }
+    > = [{ text: prompt }];
+    for (const s of samples) {
+      parts.push({
+        inlineData: {
+          mimeType: s.mimeType,
+          data: s.base64,
+        },
+      });
+    }
+
+    const result = await model.generateContent(parts);
     const response = result.response;
 
     let responseText = '';
