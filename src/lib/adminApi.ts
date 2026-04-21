@@ -45,6 +45,13 @@ export async function apiChangeUserPassword(uid: string, newPassword: string): P
     body: JSON.stringify({ action: 'changePassword', uid, newPassword }),
   });
 }
+// ユーザーのログインID変更
+export async function apiChangeUserLoginId(uid: string, newLoginId: string): Promise<void> {
+  await request('/api/admin/users', {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'changeLoginId', uid, newLoginId }),
+  });
+}
 
 // クイズ一覧
 export async function apiGetQuizzes(): Promise<Quiz[]> {

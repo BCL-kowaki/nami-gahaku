@@ -18,6 +18,7 @@ import {
   apiUpdateUser,
   apiDeleteUser,
   apiChangeUserPassword,
+  apiChangeUserLoginId,
   apiGetQuizzes,
   apiUpdateQuiz,
   apiDeleteQuiz,
@@ -65,6 +66,15 @@ const CATEGORIES: QuizCategory[] = [
   'にちようひん', 'たてもの', 'キャラクター', 'スポーツ', 'その他',
 ];
 
+// ユーザードキュメントから現在のログインID相当を導く
+// loginIdフィールドがあればそれ、無ければ email から @nami-quiz.app を除いた部分、
+// それも無ければ email をそのまま
+function resolveDisplayLoginId(u: UserProfile): string {
+  if (u.loginId) return u.loginId;
+  if (u.email?.endsWith('@nami-quiz.app')) return u.email.replace('@nami-quiz.app', '');
+  return u.email ?? '';
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('users');
@@ -109,6 +119,8 @@ export default function AdminPage() {
 
   // ユーザー編集
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserLoginId, setEditUserLoginId] = useState('');       // ログインID
+  const [editUserOriginalLoginId, setEditUserOriginalLoginId] = useState(''); // 変更検知用
   const [editUserName, setEditUserName] = useState('');
   const [editUserBirthday, setEditUserBirthday] = useState('');
   const [editUserScore, setEditUserScore] = useState(0);
@@ -223,6 +235,9 @@ export default function AdminPage() {
   // ユーザー編集開始
   const handleEditUser = (u: UserProfile) => {
     setEditingUserId(u.uid);
+    const currentLoginId = resolveDisplayLoginId(u);
+    setEditUserLoginId(currentLoginId);
+    setEditUserOriginalLoginId(currentLoginId);
     setEditUserName(u.displayName);
     setEditUserBirthday(u.birthday || '');
     setEditUserScore(u.totalScore);
@@ -231,7 +246,7 @@ export default function AdminPage() {
     setShowEditUserPassword(false);
   };
 
-  // ユーザー編集保存（プロフィール＋任意でパスワード変更）
+  // ユーザー編集保存（プロフィール＋任意でパスワード・ログインID変更）
   const handleSaveUser = async () => {
     if (!editingUserId || !editUserName.trim()) return;
     // パスワードを変更する場合は6文字以上のバリデーション
@@ -239,6 +254,28 @@ export default function AdminPage() {
       showMessage('パスワードは6文字以上にしてください');
       return;
     }
+    // ログインIDのクライアントサイド簡易バリデーション
+    const newLoginId = editUserLoginId.trim();
+    const loginIdChanged = newLoginId !== editUserOriginalLoginId;
+    if (loginIdChanged) {
+      if (!newLoginId) {
+        showMessage('IDは必須です');
+        return;
+      }
+      if (newLoginId.includes('@')) {
+        showMessage('IDに@は使用できません');
+        return;
+      }
+      if (newLoginId.length < 3) {
+        showMessage('IDは3文字以上にしてください');
+        return;
+      }
+      if (!/^[a-zA-Z0-9_.-]+$/.test(newLoginId)) {
+        showMessage('IDは英数字と _ . - のみ使用できます');
+        return;
+      }
+    }
+
     setSavingUser(true);
     try {
       const updates: Record<string, unknown> = {
@@ -251,6 +288,11 @@ export default function AdminPage() {
       }
       await apiUpdateUser(editingUserId, updates as Partial<UserProfile>);
 
+      // ログインIDが変更されていれば更新
+      if (loginIdChanged) {
+        await apiChangeUserLoginId(editingUserId, newLoginId);
+      }
+
       // パスワードが入力されていれば変更
       if (editUserNewPassword) {
         await apiChangeUserPassword(editingUserId, editUserNewPassword);
@@ -258,12 +300,22 @@ export default function AdminPage() {
 
       setUsers(prev => prev.map(u =>
         u.uid === editingUserId
-          ? { ...u, displayName: editUserName.trim(), birthday: editUserBirthday || u.birthday, totalScore: editUserScore, totalAnswered: editUserAnswered }
+          ? {
+              ...u,
+              displayName: editUserName.trim(),
+              birthday: editUserBirthday || u.birthday,
+              totalScore: editUserScore,
+              totalAnswered: editUserAnswered,
+              loginId: loginIdChanged ? newLoginId : u.loginId,
+            }
           : u
       ));
       setEditingUserId(null);
       setEditUserNewPassword('');
-      showMessage(editUserNewPassword ? 'ユーザー情報とパスワードを更新しました' : 'ユーザー情報を更新しました');
+      const parts: string[] = ['ユーザー情報'];
+      if (loginIdChanged) parts.push('ID');
+      if (editUserNewPassword) parts.push('パスワード');
+      showMessage(`${parts.join('と')}を更新しました`);
     } catch (err) {
       console.error('ユーザー更新エラー:', err);
       const msg = err instanceof Error ? err.message : '更新に失敗しました';
@@ -276,6 +328,8 @@ export default function AdminPage() {
   // ユーザー編集キャンセル
   const handleCancelEditUser = () => {
     setEditingUserId(null);
+    setEditUserLoginId('');
+    setEditUserOriginalLoginId('');
     setEditUserNewPassword('');
     setShowEditUserPassword(false);
   };
@@ -620,11 +674,21 @@ export default function AdminPage() {
                       {editingUserId === u.uid ? (
                         /* === ユーザー編集モード === */
                         <div className="flex flex-col gap-3">
-                          {/* ID表示（読み取り専用） */}
+                          {/* ID編集（英数字と _ . - のみ／3文字以上） */}
                           <div>
-                            <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">ID（ログイン用・変更不可）</label>
-                            <p className="text-sm font-mono bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[5px] px-3 py-2 break-all">
-                              {u.loginId ?? (u.email?.endsWith('@nami-quiz.app') ? u.email.replace('@nami-quiz.app', '') : u.email)}
+                            <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">ID（ログイン用）</label>
+                            <input
+                              type="text"
+                              value={editUserLoginId}
+                              onChange={(e) => setEditUserLoginId(e.target.value)}
+                              className="input-field font-mono"
+                              placeholder="英数字と _ . - のみ / 3文字以上"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              maxLength={30}
+                            />
+                            <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
+                              @を含めることはできません。他のユーザーと重複するIDは使えません。
                             </p>
                           </div>
                           <div>

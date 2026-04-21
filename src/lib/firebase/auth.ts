@@ -43,10 +43,16 @@ export async function signUp(loginId: string, password: string, displayName: str
   return user;
 }
 
-// ログイン
+// ログイン（ID または メアドを受け取る／従来の挙動）
 export async function logIn(loginId: string, password: string): Promise<User> {
   const authEmail = toAuthEmail(loginId);
   const credential = await signInWithEmailAndPassword(auth, authEmail, password);
+  return credential.user;
+}
+
+// ログイン（解決済みのemailで直接）
+export async function logInWithEmail(email: string, password: string): Promise<User> {
+  const credential = await signInWithEmailAndPassword(auth, email, password);
   return credential.user;
 }
 

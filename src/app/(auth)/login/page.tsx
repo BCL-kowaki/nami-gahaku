@@ -9,7 +9,7 @@ import { LogIn, Eye, EyeOff } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { browserLocalPersistence, browserSessionPersistence, setPersistence } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
-import { logIn } from '@/lib/firebase/auth';
+import { logInWithEmail } from '@/lib/firebase/auth';
 import { useAuthStore } from '@/stores/authStore';
 
 export default function LoginPage() {
@@ -49,9 +49,26 @@ export default function LoginPage() {
         console.warn('管理者検証通信エラー:', adminErr);
       }
 
-      // ログイン記憶の永続性を設定
+      // ① ログインID → Firebase Auth の email を解決
+      //    （メアド形式ならそのまま、IDならFirestoreから引く、未登録ならフォールバック）
+      let authEmail = loginId;
+      try {
+        const resolveRes = await fetch('/api/auth/resolve-id', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loginId }),
+        });
+        const resolveJson = await resolveRes.json();
+        if (resolveJson.success && resolveJson.data?.email) {
+          authEmail = resolveJson.data.email;
+        }
+      } catch (resolveErr) {
+        console.warn('ID解決通信エラー（フォールバック）:', resolveErr);
+      }
+
+      // ② ログイン記憶の永続性を設定
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
-      await logIn(loginId, password);
+      await logInWithEmail(authEmail, password);
       await refreshProfile();
       router.push('/play');
     } catch (err) {

@@ -83,6 +83,37 @@ export async function updateUserPasswordAdmin(uid: string, newPassword: string):
   await adminAuthApp.updateUser(uid, { password: newPassword });
 }
 
+// loginId が他ユーザーで既に使われているかチェック
+export async function isLoginIdTakenByOther(loginId: string, excludeUid: string): Promise<boolean> {
+  const snap = await adminDb
+    .collection('users')
+    .where('loginId', '==', loginId)
+    .limit(2)
+    .get();
+  return snap.docs.some(d => d.id !== excludeUid);
+}
+
+// ログインID変更（loginId フィールドのみ更新。email は触らない）
+export async function updateUserLoginIdAdmin(uid: string, newLoginId: string): Promise<void> {
+  const trimmed = newLoginId.trim();
+  if (!trimmed) {
+    throw new Error('IDを入力してください');
+  }
+  if (trimmed.length < 3) {
+    throw new Error('IDは3文字以上にしてください');
+  }
+  if (trimmed.includes('@')) {
+    throw new Error('IDに@は使用できません');
+  }
+  if (!/^[a-zA-Z0-9_.-]+$/.test(trimmed)) {
+    throw new Error('IDは英数字と _ . - のみ使用できます');
+  }
+  if (await isLoginIdTakenByOther(trimmed, uid)) {
+    throw new Error('このIDはすでに使用されています');
+  }
+  await adminDb.collection('users').doc(uid).update({ loginId: trimmed });
+}
+
 // ユーザー削除（サブコレクション含む）
 export async function deleteUserAdmin(uid: string): Promise<void> {
   const userRef = adminDb.collection('users').doc(uid);

@@ -6,6 +6,7 @@ import {
   updateUserAdmin,
   deleteUserAdmin,
   updateUserPasswordAdmin,
+  updateUserLoginIdAdmin,
 } from '@/lib/firebase/firestoreAdmin';
 import { successResponse, errorResponse, serverErrorResponse } from '@/lib/utils';
 import type { UserProfile } from '@/types';
@@ -39,7 +40,8 @@ export async function PATCH(request: NextRequest) {
     }
     const body = await request.json() as
       | { action?: 'update'; uid: string; data: Partial<UserProfile> }
-      | { action: 'changePassword'; uid: string; newPassword: string };
+      | { action: 'changePassword'; uid: string; newPassword: string }
+      | { action: 'changeLoginId'; uid: string; newLoginId: string };
 
     if ('action' in body && body.action === 'changePassword') {
       if (!body.uid || !body.newPassword) {
@@ -49,6 +51,14 @@ export async function PATCH(request: NextRequest) {
         return errorResponse('パスワードは6文字以上にしてください', 'INVALID_REQUEST');
       }
       await updateUserPasswordAdmin(body.uid, body.newPassword);
+      return successResponse({ ok: true });
+    }
+
+    if ('action' in body && body.action === 'changeLoginId') {
+      if (!body.uid || !body.newLoginId) {
+        return errorResponse('uid と newLoginId は必須です', 'INVALID_REQUEST');
+      }
+      await updateUserLoginIdAdmin(body.uid, body.newLoginId);
       return successResponse({ ok: true });
     }
 
