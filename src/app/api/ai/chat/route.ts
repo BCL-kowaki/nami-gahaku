@@ -243,7 +243,7 @@ async function handleImageRequest(message: string) {
     const model = getImageModel();
 
     // なみ画伯の過去作品からランダムにサンプルを取得（few-shot）
-    const samples = await getSampleQuizImages(3);
+    const samples = await getSampleQuizImages(5);
 
     const prompt = `${IMAGE_STYLE_PROMPT}
 

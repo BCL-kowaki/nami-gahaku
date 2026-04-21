@@ -10,9 +10,9 @@ export interface SampleImage {
 /**
  * isHidden==false のクイズからランダムにサンプル画像を取得し、
  * 各画像を Gemini に渡せる base64 形式で返す。
- * @param count 取得するサンプル画像数（デフォルト3枚）
+ * @param count 取得するサンプル画像数（デフォルト5枚）
  */
-export async function getSampleQuizImages(count = 3): Promise<SampleImage[]> {
+export async function getSampleQuizImages(count = 5): Promise<SampleImage[]> {
   try {
     // 表示中のクイズ画像を最大30件取得
     const snap = await adminDb
