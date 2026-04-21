@@ -620,6 +620,13 @@ export default function AdminPage() {
                       {editingUserId === u.uid ? (
                         /* === ユーザー編集モード === */
                         <div className="flex flex-col gap-3">
+                          {/* ID表示（読み取り専用） */}
+                          <div>
+                            <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">ID（ログイン用・変更不可）</label>
+                            <p className="text-sm font-mono bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[5px] px-3 py-2 break-all">
+                              {u.loginId ?? (u.email?.endsWith('@nami-quiz.app') ? u.email.replace('@nami-quiz.app', '') : u.email)}
+                            </p>
+                          </div>
                           <div>
                             <label className="block text-[10px] font-bold mb-1 text-[var(--color-text-secondary)]">表示名</label>
                             <input
