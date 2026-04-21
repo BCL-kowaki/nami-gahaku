@@ -1,7 +1,8 @@
 // POST /api/admin/quiz/create - 管理者用クイズ作成（画像アップロード含む）
 import { NextRequest } from 'next/server';
-import { adminStorage } from '@/lib/firebase/admin';
-import { createQuiz, getAdminSettings } from '@/lib/firebase/firestore';
+import { adminStorage, adminDb } from '@/lib/firebase/admin';
+import { FieldValue } from 'firebase-admin/firestore';
+import { verifyAdminPassword } from '@/lib/firebase/adminAuth';
 import { successResponse, errorResponse, serverErrorResponse } from '@/lib/utils';
 import type { QuizCategory } from '@/types';
 
@@ -24,10 +25,8 @@ export async function POST(request: NextRequest) {
       dummyChoices: [string, string, string];
     };
 
-    // 管理者認証チェック
-    const adminSettings = await getAdminSettings();
-    const correctPass = adminSettings?.adminPassword ?? 'admin';
-    if (adminPassword !== correctPass) {
+    // 管理者認証チェック（Admin SDK 経由、Firestoreルールに依存しない）
+    if (!(await verifyAdminPassword(adminPassword))) {
       return errorResponse('管理者認証に失敗しました', 'UNAUTHORIZED', 401);
     }
 
@@ -83,23 +82,32 @@ export async function POST(request: NextRequest) {
       originalImageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${origEncodedPath}?alt=media&token=${origToken}`;
     }
 
-    // Firestoreにクイズを作成
-    const quizId = await createQuiz({
+    // Firestoreにクイズを作成（Admin SDK 経由でルールを迂回）
+    const quizRef = adminDb.collection('quizzes').doc();
+    const quizData: Record<string, unknown> = {
       imageUrl,
-      originalImageUrl,
       answer: answer.trim(),
       category,
-      dummyChoices: dummyChoices.map((d: string) => d.trim()) as [string, string, string],
+      dummyChoices: dummyChoices.map((d: string) => d.trim()),
       creatorUid: 'official',
       creatorName: 'nami【公式】',
       isOfficial: true,
       themeId: null,
-    });
+      randomSeed: Math.random(),
+      reportCount: 0,
+      isHidden: false,
+      createdAt: FieldValue.serverTimestamp(),
+    };
+    if (originalImageUrl) {
+      quizData.originalImageUrl = originalImageUrl;
+    }
+    await quizRef.set(quizData);
 
-    return successResponse({ quizId, imageUrl }, 201);
+    return successResponse({ quizId: quizRef.id, imageUrl }, 201);
   } catch (err) {
     console.error('管理者クイズ作成エラー:', err);
-    return serverErrorResponse('クイズの作成に失敗しました');
+    const detail = err instanceof Error ? err.message : '不明なエラー';
+    return serverErrorResponse(`クイズの作成に失敗しました: ${detail}`);
   }
 }
 

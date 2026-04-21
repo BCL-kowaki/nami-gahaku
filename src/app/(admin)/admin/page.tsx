@@ -700,7 +700,8 @@ export default function AdminPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        setCreateError(data.error || 'クイズの作成に失敗しました');
+        const detail = data.details ? `（${data.details}）` : '';
+        setCreateError(`${data.error || 'クイズの作成に失敗しました'}${detail}`);
         return;
       }
 
