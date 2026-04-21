@@ -97,8 +97,13 @@ export async function incrementScore(uid: string, isCorrect: boolean): Promise<v
 // ==================
 
 // ランダムにクイズ1問取得（インデックス不要な方式）
-// skipAnswered: true → 正解済みクイズをスキップ / false → 全未回答を対象
-export async function getRandomQuiz(uid: string, skipAnswered?: boolean): Promise<Quiz | null> {
+// skipAnswered: true → 正解済みクイズをスキップ / false → 全クイズ対象（過去の回答状況は問わない）
+// excludeIds: 現在セッションで既に出題済みのIDを除外（1ラウンド内の重複防止）
+export async function getRandomQuiz(
+  uid: string,
+  skipAnswered?: boolean,
+  excludeIds: string[] = []
+): Promise<Quiz | null> {
   // isHidden==false のクイズのみ取得（等値フィルタ＋orderByでインデックス不要）
   const q = query(
     collection(db, 'quizzes'),
@@ -109,25 +114,29 @@ export async function getRandomQuiz(uid: string, skipAnswered?: boolean): Promis
 
   if (snap.empty) return null;
 
-  // クライアント側でシャッフルして未回答のクイズを探す
-  const shuffled = [...snap.docs].sort(() => Math.random() - 0.5);
+  // 既に出題済みのIDを除外してからシャッフル（ラウンド内の重複防止）
+  const excludeSet = new Set(excludeIds);
+  const filtered = snap.docs.filter(d => !excludeSet.has(d.id));
+  const candidates = filtered.length > 0 ? filtered : snap.docs; // 全て出し切った場合のみフォールバック
+  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
 
-  for (const quizDoc of shuffled) {
-    const answeredSnap = await getDoc(doc(db, 'users', uid, 'answered', quizDoc.id));
-    if (skipAnswered) {
-      // 正解済みスキップモード: 正解したクイズは飛ばす
+  if (skipAnswered) {
+    // ON（正解したクイズは出さない）: 正解済みのクイズは飛ばす
+    // 不正解だったクイズや未回答のクイズは出題対象
+    for (const quizDoc of shuffled) {
+      const answeredSnap = await getDoc(doc(db, 'users', uid, 'answered', quizDoc.id));
       if (answeredSnap.exists()) {
         const data = answeredSnap.data() as AnsweredItem;
         if (data.isCorrect) continue; // 正解済み → スキップ
       }
-    } else {
-      // 通常モード: 回答済み（正解・不正解問わず）をスキップ
-      if (answeredSnap.exists()) continue;
+      return { id: quizDoc.id, ...quizDoc.data() } as Quiz;
     }
-    return { id: quizDoc.id, ...quizDoc.data() } as Quiz;
+    return null; // 出題可能なクイズなし（正解済み以外が尽きた）
   }
 
-  return null; // 全問回答済み
+  // OFF: 全クイズから単純にランダム選出（過去の回答状況は関係なし）
+  const chosen = shuffled[0];
+  return { id: chosen.id, ...chosen.data() } as Quiz;
 }
 
 // フラッシュアニメーション用: ランダムなクイズ画像URLを複数取得

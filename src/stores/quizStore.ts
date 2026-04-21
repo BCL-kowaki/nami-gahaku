@@ -15,6 +15,7 @@ interface QuizState {
   score: number;            // セッション内正解数
   totalAnswered: number;    // セッション内回答数
   isLoading: boolean;
+  sessionQuizIds: string[]; // このセッションで出題したクイズID（重複防止）
 
   setCurrentQuiz: (quiz: QuizDisplay | null) => void;
   selectAnswer: (answer: string) => void;
@@ -36,13 +37,17 @@ export const useQuizStore = create<QuizState>((set, get) => ({
   score: 0,
   totalAnswered: 0,
   isLoading: false,
+  sessionQuizIds: [],
 
-  setCurrentQuiz: (quiz) => set({
+  setCurrentQuiz: (quiz) => set((state) => ({
     currentQuiz: quiz,
     selectedAnswer: null,
     isAnswered: false,
     isCorrect: null,
-  }),
+    sessionQuizIds: quiz?.id && !state.sessionQuizIds.includes(quiz.id)
+      ? [...state.sessionQuizIds, quiz.id]
+      : state.sessionQuizIds,
+  })),
 
   selectAnswer: (answer) => set({ selectedAnswer: answer }),
 
@@ -68,6 +73,7 @@ export const useQuizStore = create<QuizState>((set, get) => ({
     score: 0,
     totalAnswered: 0,
     isLoading: false,
+    sessionQuizIds: [],
   }),
 
   setLoading: (loading) => set({ isLoading: loading }),

@@ -34,6 +34,7 @@ export default function PlayPage() {
     score,
     totalAnswered,
     isLoading,
+    sessionQuizIds,
     setCurrentQuiz,
     selectAnswer,
     setResult,
@@ -56,7 +57,7 @@ export default function PlayPage() {
     setLoading(true);
     try {
       const skipAnswered = profile?.skipAnswered ?? false;
-      const quiz = await getRandomQuiz(user.uid, skipAnswered);
+      const quiz = await getRandomQuiz(user.uid, skipAnswered, sessionQuizIds);
       if (quiz && quiz.id) {
         const choices = shuffle([quiz.answer, ...quiz.dummyChoices]);
         const display: QuizDisplay = {
@@ -77,7 +78,7 @@ export default function PlayPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, profile, setCurrentQuiz, setLoading]);
+  }, [user, profile, sessionQuizIds, setCurrentQuiz, setLoading]);
 
   // スタートボタン押下
   const handleStart = () => {
